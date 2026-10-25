@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>bitwallet — Money, but chunkier.</title>
+<meta name="description" content="bitwallet is the 128bit family's pixel wallet: balances, cards, transactions and savings quests in one chunky place. Coming soon.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0b16;
+    --panel:#141428;
+    --green:#4ade80;
+    --green-deep:#15803d;
+    --gold:#facc15;
+    --orange:#ff9f1c;
+    --red:#ff5d5d;
+    --ink:#f4f1ff;
+    --muted:#9a97b8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;overflow-x:hidden}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background-image:radial-gradient(rgba(74,222,128,.08) 1px, transparent 1px);background-size:22px 22px}
+  .wrap{max-width:960px;margin:0 auto;padding:0 20px;position:relative;z-index:1}
+  .pixel{font-family:'Press Start 2P',monospace}
+  nav{display:flex;justify-content:space-between;align-items:center;padding:22px 0}
+  .logo{display:flex;align-items:center;gap:12px;font-family:'Press Start 2P',monospace;font-size:15px}
+  .logo-mark{width:34px;height:34px;background:var(--green);display:grid;place-items:center;font-size:18px;box-shadow:0 4px 0 var(--green-deep), 4px 0 0 var(--green-deep), -4px 0 0 var(--green-deep), 0 -4px 0 var(--green-deep);image-rendering:pixelated}
+  .badge{font-family:'Press Start 2P',monospace;font-size:9px;color:var(--bg);background:var(--gold);padding:8px 10px;letter-spacing:1px;box-shadow:0 4px 0 #a16207}
+  header{text-align:center;padding:52px 0 30px}
+  .eyebrow{font-family:'Press Start 2P',monospace;font-size:10px;color:var(--green);letter-spacing:2px;margin-bottom:26px}
+  h1{font-family:'Press Start 2P',monospace;font-size:clamp(22px,5.5vw,44px);line-height:1.35;margin-bottom:24px;text-shadow:0 4px 0 #1a1a33, 4px 0 0 #1a1a33}
+  h1 .g{color:var(--green)} h1 .y{color:var(--gold)}
+  .sub{color:var(--muted);font-size:18px;max-width:620px;margin:0 auto 20px;line-height:1.6}
+  .try{font-family:'Press Start 2P',monospace;font-size:9px;color:var(--green);letter-spacing:1px;margin-bottom:26px}
+  /* ---------- wallet ---------- */
+  .wallet{display:flex;gap:24px;flex-wrap:wrap;justify-content:center;margin-bottom:36px;align-items:flex-start}
+  .card-stack{width:340px}
+  .balance{background:linear-gradient(135deg,#14532d,#0b0b16);border:3px solid #2a2a4a;padding:22px;box-shadow:8px 8px 0 #000;margin-bottom:18px}
+  .balance .lbl{font-family:'Press Start 2P',monospace;font-size:9px;color:var(--muted);letter-spacing:1px}
+  .balance .amt{font-family:'Press Start 2P',monospace;font-size:30px;color:var(--green);margin:12px 0 4px}
+  .balance .sub2{font-size:13px;color:var(--muted)}
+  .actions{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+  .actions button{background:var(--panel);border:3px solid #2a2a4a;color:var(--ink);padding:12px 4px;cursor:pointer;font-size:12px}
+  .actions button span{display:block;font-size:20px;margin-bottom:4px}
+  .actions button:hover{border-color:var(--green)}
+  .cards{display:flex;gap:12px}
+  .ccard{flex:1;background:#1f1f3a;border:3px solid #2a2a4a;padding:14px;cursor:pointer}
+  .ccard.active{border-color:var(--gold)}
+  .ccard .chip{width:26px;height:18px;background:var(--gold);margin-bottom:10px}
+  .ccard .num{font-family:'Press Start 2P',monospace;font-size:10px;margin-bottom:8px}
+  .ccard .name{font-size:12px;color:var(--muted)}
+  /* ---------- transactions ---------- */
+  .txns{background:var(--panel);border:3px solid #2a2a4a;padding:18px;width:340px;box-shadow:8px 8px 0 #000}
+  .txns h3{font-family:'Press Start 2P',monospace;font-size:11px;color:var(--green);margin-bottom:14px}
+  .txn{display:flex;gap:12px;padding:12px 0;border-bottom:2px solid #2a2a4a;cursor:pointer}
+  .txn .ico{width:36px;height:36px;flex-shrink:0;display:grid;place-items:center;font-size:18px;background:#1f1f3a}
+  .txn .meta{flex:1;min-width:0}
+  .txn .who{font-weight:800;font-size:14px}
+  .txn .cat{font-size:12px;color:var(--muted)}
+  .txn .amt{font-weight:800;font-size:14px;flex-shrink:0}
+  .txn .amt.out{color:var(--red)} .txn .amt.in{color:var(--green)}
+  .goal{margin-top:16px;background:#1f1f3a;padding:12px;font-size:13px;line-height:1.6}
+  .goal b{color:var(--gold)}
+  .goal .bar{height:10px;background:#0b0b16;margin-top:8px}
+  .goal .bar i{display:block;height:100%;background:var(--gold);width:0%;transition:width .3s}
+  /* ---------- modal ---------- */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;place-items:center;z-index:20}
+  .modal.open{display:grid}
+  .modal .box{background:var(--panel);border:3px solid #2a2a4a;padding:20px;width:min(420px,92vw);box-shadow:8px 8px 0 #000}
+  .modal h3{font-family:'Press Start 2P',monospace;font-size:11px;margin-bottom:14px;color:var(--green)}
+  .modal input{width:100%;padding:10px 12px;background:#0b0b16;border:3px solid #2a2a4a;color:var(--ink);font-size:14px;margin-bottom:10px}
+  .modal .row{display:flex;gap:10px;justify-content:flex-end}
+  .modal .row button{font-family:'Press Start 2P',monospace;font-size:9px;padding:10px 16px;border:none;cursor:pointer;background:#1f1f3a;color:var(--ink)}
+  .modal .row button.send{background:var(--green);color:#0b0b16}
+  /* ---------- features ---------- */
+  .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;padding:10px 0 36px}
+  .feat{background:var(--panel);border:3px solid #2a2a4a;padding:20px}
+  .feat h3{font-family:'Press Start 2P',monospace;font-size:11px;margin-bottom:10px;color:var(--green)}
+  .feat p{color:var(--muted);font-size:14px;line-height:1.6}
+  .waitlist{background:var(--panel);border:3px solid #2a2a4a;padding:28px;text-align:center;margin-bottom:40px}
+  .waitlist h2{font-family:'Press Start 2P',monospace;font-size:14px;margin-bottom:16px}
+  .waitlist form{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .waitlist input{padding:12px 14px;background:#0b0b16;border:3px solid #2a2a4a;color:var(--ink);font-size:14px;min-width:240px}
+  .waitlist button{font-family:'Press Start 2P',monospace;font-size:10px;padding:12px 18px;background:var(--green);color:#0b0b16;border:none;cursor:pointer;box-shadow:0 4px 0 var(--green-deep)}
+  .waitlist .note{color:var(--muted);font-size:13px;margin-top:12px}
+  footer{text-align:center;color:var(--muted);font-size:13px;padding:20px 0 40px}
+  .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(80px);background:var(--green);color:#0b0b16;font-family:'Press Start 2P',monospace;font-size:11px;padding:14px 20px;box-shadow:0 4px 0 var(--green-deep);transition:transform .3s;z-index:30}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <div class="logo"><span class="logo-mark">👛</span> bitwallet</div>
+    <span class="badge">COMING SOON</span>
+  </nav>
+
+  <header>
+    <div class="eyebrow">PART OF THE 128BIT FAMILY</div>
+    <h1>Money, but <span class="g">chunkier</span>.</h1>
+    <p class="sub">A pixel wallet that makes money feel tangible again: balances you can see, cards you can tap, transactions that tell a story, and savings quests that pay XP.</p>
+    <div class="try">▼ TRY THE MOCK BELOW — SEND MONEY, WATCH THE GOAL BAR MOVE ▼</div>
+  </header>
+
+  <section class="wallet">
+    <div class="card-stack">
+      <div class="balance">
+        <div class="lbl">TOTAL BALANCE</div>
+        <div class="amt" id="balAmt">$1,284.50</div>
+        <div class="sub2">↑ $212 this week · 2 accounts linked</div>
+      </div>
+      <div class="actions">
+        <button id="sendBtn"><span>📤</span>Send</button>
+        <button id="reqBtn"><span>📥</span>Request</button>
+        <button id="addBtn"><span>➕</span>Add</button>
+        <button id="moreBtn"><span>•••</span>More</button>
+      </div>
+      <div class="cards">
+        <div class="ccard active" data-card="Main"><div class="chip"></div><div class="num">•••• 4242</div><div class="name">Main Card</div></div>
+        <div class="ccard" data-card="Quest"><div class="chip"></div><div class="num">•••• 1337</div><div class="name">Quest Card</div></div>
+      </div>
+    </div>
+
+    <div class="txns">
+      <h3>📜 RECENT ACTIVITY</h3>
+      <div id="txnList"></div>
+      <div class="goal">
+        <b>QUEST: SAVE $50 THIS WEEK</b><br>
+        Every send under $20 counts toward the goal.
+        <div class="bar"><i id="goalbar"></i></div>
+        <span id="goaltext">$0 / $50 saved</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="feat"><h3>💳 TAP CARDS</h3><p>Switch accounts with one tap. Every card shows its balance at a glance — no digging through menus.</p></div>
+    <div class="feat"><h3>📜 STORY TRANSACTIONS</h3><p>Transactions read like a feed: who, what, why — with categories that feed 128bitgold's budgets.</p></div>
+    <div class="feat"><h3>🎮 SAVINGS QUESTS</h3><p>Weekly savings goals pay XP into 128bitlife. Small wins, stacked up.</p></div>
+    <div class="feat"><h3>👨‍👩‍👧 FAMILY WALLET</h3><p>Shared pots for the household on the family feed — trips, gifts, and the pizza fund.</p></div>
+  </section>
+
+  <section class="waitlist">
+    <h2>JOIN THE WAITLIST</h2>
+    <form id="waitlistForm">
+      <input type="email" placeholder="you@email.com" required>
+      <button type="submit">SIGN ME UP</button>
+    </form>
+    <p class="note" id="waitlistNote">Be first to know when bitwallet launches.</p>
+  </section>
+
+  <footer>bitwallet — a 128bit family app · Built with pixels, not promises.</footer>
+</div>
+
+<div class="modal" id="modal">
+  <div class="box">
+    <h3 id="modalTitle">📤 SEND MONEY</h3>
+    <input id="mTo" placeholder="To… (name or @handle)">
+    <input id="mAmt" type="number" min="1" step="0.01" placeholder="Amount ($)">
+    <input id="mNote" placeholder="Note (optional)">
+    <div class="row">
+      <button id="mCancel">CANCEL</button>
+      <button class="send" id="mSend">SEND →</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+  let balance = 1284.50, saved = 0;
+  const txns = [
+    {ico:'☕', who:'Corner Café', cat:'Food & Drink', amt:-6.75},
+    {ico:'🎮', who:'128bit Shop', cat:'Cosmetics', amt:-12.00},
+    {ico:'💰', who:'Quest reward', cat:'128bitlife', amt:25.00},
+    {ico:'⛽', who:'Fuel stop', cat:'Transport', amt:-48.20},
+    {ico:'🎬', who:'Movie night', cat:'Fun', amt:-18.50},
+  ];
+  const listEl = document.getElementById('txnList'), toastEl = document.getElementById('toast'), balEl = document.getElementById('balAmt');
+  let toastTimer;
+  function toast(msg){ toastEl.textContent = msg; toastEl.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(()=>toastEl.classList.remove('show'), 2200); }
+  function money(n){ return (n < 0 ? '−$' : '+$') + Math.abs(n).toFixed(2); }
+  function renderTxns(){
+    listEl.innerHTML = '';
+    txns.forEach(t => {
+      const d = document.createElement('div');
+      d.className = 'txn';
+      d.innerHTML = '<span class="ico">' + t.ico + '</span><div class="meta"><div class="who">' + t.who + '</div><div class="cat">' + t.cat + '</div></div><span class="amt ' + (t.amt < 0 ? 'out' : 'in') + '">' + money(t.amt) + '</span>';
+      listEl.appendChild(d);
+    });
+    balEl.textContent = '$' + balance.toFixed(2);
+  }
+  function openModal(title){ document.getElementById('modalTitle').textContent = title; document.getElementById('modal').classList.add('open'); }
+  document.getElementById('sendBtn').addEventListener('click', () => openModal('📤 SEND MONEY'));
+  document.getElementById('reqBtn').addEventListener('click', () => openModal('📥 REQUEST MONEY'));
+  document.getElementById('addBtn').addEventListener('click', () => { toast('➕ ADD MONEY — COMING SOON IN THE REAL APP'); });
+  document.getElementById('moreBtn').addEventListener('click', () => { toast('••• MORE — CARDS, POTS & SETTINGS COMING SOON'); });
+  document.querySelectorAll('.ccard').forEach(c => c.addEventListener('click', () => {
+    document.querySelectorAll('.ccard').forEach(x => x.classList.remove('active')); c.classList.add('active');
+    toast('💳 ' + c.dataset.card.toUpperCase() + ' CARD SELECTED');
+  }));
+  document.getElementById('mCancel').addEventListener('click', () => document.getElementById('modal').classList.remove('open'));
+  document.getElementById('mSend').addEventListener('click', () => {
+    const to = document.getElementById('mTo').value || 'someone';
+    const amt = parseFloat(document.getElementById('mAmt').value);
+    if (!amt || amt <= 0){ toast('ENTER AN AMOUNT FIRST'); return; }
+    const sending = document.getElementById('modalTitle').textContent.includes('SEND');
+    if (sending){ balance -= amt; if (amt <= 20){ saved += amt; document.getElementById('goalbar').style.width = Math.min(saved / 50 * 100, 100) + '%'; document.getElementById('goaltext').textContent = '$' + saved.toFixed(2) + ' / $50 saved'; } }
+    else { balance += amt; }
+    txns.unshift({ico: sending ? '📤' : '📥', who: to, cat: sending ? 'Sent' : 'Received', amt: sending ? -amt : amt});
+    renderTxns();
+    document.getElementById('modal').classList.remove('open');
+    toast((sending ? '📤 SENT $' : '📥 REQUESTED $') + amt.toFixed(2) + ' — +10 XP');
+    if (saved >= 50) toast('QUEST COMPLETE! +25 XP — $50 SAVED');
+    document.getElementById('mTo').value = ''; document.getElementById('mAmt').value = ''; document.getElementById('mNote').value = '';
+  });
+  document.getElementById('waitlistForm').addEventListener('submit', e => { e.preventDefault(); document.getElementById('waitlistNote').textContent = 'You are on the list. +10 XP for joining early.'; toast('+10 XP — WAITLIST JOINED'); e.target.reset(); });
+  renderTxns();
+</script>
+</body>
+</html>
