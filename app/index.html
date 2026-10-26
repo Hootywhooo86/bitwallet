@@ -221,6 +221,16 @@
       <p class="hint" id="bankStatus">Sign in to your bank through Plaid and your Visa / Mastercard purchases flow in by themselves, sorted into months and categories. bitwallet gets read-only purchase history and the last 4 digits — never your password or full card number.</p>
     </div>
     <div class="card">
+      <h2>📲 AUTO-LOG PURCHASES</h2>
+      <button class="pxbtn go" id="alertBtn" style="width:100%;padding:16px">TURN ON</button>
+      <p class="hint" id="alertStatus">Logs a purchase the moment RBC or Google Wallet notifies you about it. Also turn on purchase alerts for your cards in the RBC Mobile app's alert settings.</p>
+    </div>
+    <div class="card">
+      <h2>☁ CLOUD BACKUP &amp; INSIGHTS</h2>
+      <button class="pxbtn" id="cloudBtn" style="width:100%;padding:16px">TURN ON</button>
+      <p class="hint" id="cloudStatus">Keeps a private copy of your purchases in your own Supabase project, so Claude can look at your spending trends when you ask. Off until you turn it on.</p>
+    </div>
+    <div class="card">
       <h2>⚙ SETTINGS</h2>
       <label class="f">CURRENCY</label>
       <select id="currency"></select>
@@ -353,7 +363,7 @@ if (cards === null){
   passes = [{ id: 'p1', name: 'Kroger Plus', type: 'Loyalty', code: '4800012345678', color: '#1d4ed8', icon: '🛒', demo: true }, { id: 'p2', name: 'Library Card', type: 'Membership', code: 'LIB-2026-0042', color: '#c2410c', icon: '📚', demo: true }];
   store.set('demo', true); save();
 }
-function save(){ store.set('cards', cards); store.set('txs', txs); store.set('passes', passes); store.set('budgets', budgets); }
+function save(){ store.set('cards', cards); store.set('txs', txs); store.set('passes', passes); store.set('budgets', budgets); if (typeof cloudSoon === 'function') cloudSoon(); }
 const cardById = id => cards.find(c => c.id === id);
 
 /* ================= Wallet view ================= */
@@ -646,6 +656,7 @@ $('csvIn').onchange = async e => {
   raw.forEach((r, i) => {
     const amt = Math.round((flip ? -r.amt : r.amt) * 100) / 100, key = r.date + '|' + r.merchant + '|' + amt;
     if (existing.has(key)) return; existing.add(key);
+    replaceAlert(amt, r.date);
     txs.push({ id: 'i' + Date.now() + '_' + i, amt, merchant: r.merchant, cat: amt > 0 ? 'income' : guessCat(r.merchant), card: r.acct ? cardFor(r) : card, date: r.date, note: '' });
     added++;
   });
@@ -734,7 +745,7 @@ function applySync(link, r){
     const vals = { amt: -Math.round(t.amount * 100) / 100, merchant, date: t.authorized_date || t.date, card: accCard[t.account_id] || cards.find(c => c.plaidAccountId === t.account_id)?.id || '', note: t.pending ? 'pending' : '' };
     const ex = txs.find(x => x.id === id);
     if (ex) { if (ex.note === 'pending' || !ex.note) ex.note = vals.note; Object.assign(ex, { amt: vals.amt, date: vals.date, card: ex.card || vals.card }); }
-    else { txs.push({ id, ...vals, cat: plaidCat(t, merchant), plaid: true }); added++; }
+    else { replaceAlert(vals.amt, vals.date); txs.push({ id, ...vals, cat: plaidCat(t, merchant), plaid: true }); added++; }
   });
   const cur = store.get('bankCursors', {}); cur[link.id] = r.cursor; store.set('bankCursors', cur);
   link.last_synced = new Date().toISOString();
@@ -791,6 +802,90 @@ $('linkBankBtn').onclick = async () => {
 };
 $('syncBankBtn').onclick = () => syncBanks(false);
 
+/* ================= Auto-log from RBC / Google Wallet notifications ================= */
+// The Android app's PayCatcher service queues payment notifications from bank and wallet apps;
+// here they're turned into purchases. When the bank's own record arrives later (CSV or Plaid),
+// it replaces the alert version so nothing is counted twice.
+const NATIVE = !!(window.Capacitor?.isNativePlatform?.());
+const WA = NATIVE ? Capacitor.registerPlugin('WalletAlerts') : null;
+const ALERT_APPS = { 'com.rbc.mobile.android': 'RBC', 'com.google.android.apps.walletnfcrel': 'Google Wallet', 'com.samsung.android.spay': 'Samsung Wallet', 'com.td': 'TD', 'com.cibc.android.mobi': 'CIBC', 'com.bmo.mobile': 'BMO', 'com.scotiabank.banking': 'Scotiabank' };
+let alertsOn = false;
+function hashStr(s){ let h = 2166136261; for (const ch of String(s)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return (h >>> 0).toString(36); }
+function parseAlert(a){
+  const title = String(a.title || ''), text = String(a.text || ''), all = (title + ' ' + text).replace(/\s+/g, ' ');
+  if (/declin|refused|insufficient|not approved|reminder|statement|payment due|minimum payment|balance (is|of)|e-transfer request/i.test(all)) return null;
+  const m = all.match(/\$\s?([\d,]+(?:\.\d{1,2})?)/); if (!m) return null;
+  const n = parseFloat(m[1].replace(/,/g, '')); if (!(n > 0)) return null;
+  const incoming = /refund|credited|deposit|received|returned|reversal/i.test(all);
+  const END = '(?:\\s+(?:on|with|using|for|from|to|was|has|have|is)\\b|[.,;](?:\\s|$)|$)';
+  let merchant = (all.match(new RegExp('\\bat\\s+(.+?)' + END, 'i')) || (incoming && all.match(new RegExp('\\bfrom\\s+(.+?)' + END, 'i'))) || [])[1];
+  if (!merchant && !title.includes('$') && !/^(rbc|google wallet|payment|purchase|transaction)/i.test(title)) merchant = title;
+  if (!merchant) merchant = (ALERT_APPS[a.pkg] || 'Card') + ' purchase';
+  const last4 = (all.match(/(?:ending(?:\s+in)?|••+|\*{2,}|x{2,}|…|-)\s*(\d{4})\b/i) || [])[1] || '';
+  return { amt: incoming ? n : -n, merchant: merchant.trim().slice(0, 60), last4, ts: +a.time || Date.now(), app: ALERT_APPS[a.pkg] || 'Alert', key: a.key };
+}
+function addAlerts(list){
+  let added = 0;
+  list.map(parseAlert).filter(Boolean).forEach(p => {
+    const id = 'n_' + hashStr(p.key);
+    if (txs.some(t => t.id === id)) return;
+    // RBC and Google Wallet both announce the same tap: keep one.
+    if (txs.some(t => t.alert && t.amt === p.amt && Math.abs((t.ts || 0) - p.ts) < 10 * 60e3)) return;
+    const d = new Date(p.ts), date = ymd(d);
+    if (txs.some(t => !t.alert && t.amt === p.amt && Math.abs(parseYmd(t.date) - parseYmd(date)) <= 3 * 864e5 && t.merchant.toLowerCase().includes(p.merchant.toLowerCase().slice(0, 5)))) return;
+    const card = cards.find(c => p.last4 && c.last4 === p.last4)?.id || store.get('defaultCard', cards[0]?.id || '');
+    txs.push({ id, amt: p.amt, merchant: p.merchant, cat: p.amt > 0 ? 'income' : guessCat(p.merchant), card, date, note: 'from ' + p.app + ' alert', alert: true, ts: p.ts });
+    added++;
+  });
+  if (added){ save(); renderAll(); toast(`+${added} PURCHASE${added === 1 ? '' : 'S'} LOGGED`); }
+}
+function replaceAlert(amt, date){
+  const i = txs.findIndex(t => t.alert && t.amt === amt && Math.abs(parseYmd(t.date) - parseYmd(date)) <= 3 * 864e5);
+  if (i >= 0) txs.splice(i, 1);
+}
+async function drainAlerts(){ if (!WA) return; try { addAlerts((await WA.drain()).alerts || []); } catch {} }
+async function renderAlerts(){
+  if (!WA){ $('alertBtn').textContent = 'ANDROID APP ONLY'; $('alertBtn').disabled = true; return; }
+  try { alertsOn = !!(await WA.status()).enabled; } catch {}
+  $('alertBtn').textContent = alertsOn ? '✓ ON — LOGGING PURCHASES' : 'TURN ON';
+  $('alertBtn').classList.toggle('go', !alertsOn);
+  $('alertStatus').textContent = alertsOn
+    ? 'Purchases from RBC, Google Wallet and other bank app alerts are logged automatically. Make sure purchase alerts are on in the RBC Mobile app.'
+    : 'Logs a purchase the moment RBC or Google Wallet notifies you about it. Tap TURN ON, then allow "bitwallet purchase logging". It only reads payment alerts from bank and wallet apps.';
+}
+$('alertBtn').onclick = () => { if (!WA) return; if (alertsOn) return WA.openSettings(); toast('ALLOW BITWALLET'); WA.openSettings(); };
+if (WA){ WA.addListener('alert', drainAlerts); document.addEventListener('visibilitychange', () => { if (!document.hidden){ drainAlerts(); renderAlerts(); } }); }
+
+/* ================= Cloud backup (for spending insights) ================= */
+const SYNC_API = 'https://wvflpwtaszpstmjpkrhu.supabase.co/functions/v1/wallet-sync';
+var cloudTimer = null, cloudLastSent = '';
+async function cloudCall(action, extra = {}){
+  const r = await fetch(SYNC_API, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: BANK_PUB }, body: JSON.stringify({ action, device_key: deviceKey(), ...extra }) });
+  const data = await r.json().catch(() => ({})); if (!r.ok) throw new Error(data.error || 'Backup failed'); return data;
+}
+function cloudPayload(){
+  return txs.filter(t => !t.demo).map(t => { const c = cardById(t.card); return { id: t.id, date: t.date, amt: t.amt, merchant: t.merchant, cat: t.cat, card_name: c?.name || '', card_last4: c?.last4 || '', note: t.note || '', source: t.plaid ? 'plaid' : t.alert ? 'alert' : /^i\d/.test(t.id) ? 'csv' : 'manual' }; });
+}
+function cloudSoon(){ if (!store.get('cloud', false)) return; clearTimeout(cloudTimer); cloudTimer = setTimeout(cloudPush, 3000); }
+async function cloudPush(){
+  const p = cloudPayload(), sig = hashStr(JSON.stringify(p));
+  if (sig === cloudLastSent) return;
+  try { const r = await cloudCall('replace', { txs: p }); cloudLastSent = sig; store.set('cloudAt', Date.now()); renderCloud(); }
+  catch (e) { $('cloudStatus').textContent = 'Backup failed: ' + e.message + ' — will retry on the next change.'; }
+}
+function renderCloud(){
+  const on = store.get('cloud', false), at = store.get('cloudAt', 0);
+  $('cloudBtn').textContent = on ? '✓ ON — TURN OFF' : 'TURN ON';
+  $('cloudStatus').textContent = on
+    ? `Your purchases are backed up to your private Supabase, so Claude can analyse your spending when you ask.${at ? ' Last backup ' + new Date(at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + '.' : ''}`
+    : 'Keeps a private copy of your purchases in your own Supabase project, so Claude can look at your spending trends when you ask. Off until you turn it on.';
+}
+$('cloudBtn').onclick = async () => {
+  if (!store.get('cloud', false)){ store.set('cloud', true); cloudLastSent = ''; renderCloud(); toast('BACKING UP…'); cloudPush(); return; }
+  store.set('cloud', false); clearTimeout(cloudTimer); renderCloud();
+  if (confirm('Backup is off. Also delete the copy already in the cloud?')){ try { await cloudCall('wipe'); toast('CLOUD COPY DELETED'); } catch { toast('COULD NOT DELETE — TRY AGAIN'); store.set('cloud', false); } }
+};
+
 /* ================= Tabs ================= */
 function renderAll(){ renderBanner(); renderSummary(); renderCards(); renderRecent(); renderFilters(); renderMonths(); renderPasses(); renderBanks(); }
 function show(v){
@@ -801,6 +896,7 @@ function show(v){
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => show(b.dataset.v));
 document.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => show(b.dataset.goto));
 renderAll(); show(store.get('tab', 'wallet'));
+renderAlerts(); renderCloud(); drainAlerts(); cloudSoon();
 if (Date.now() - store.get('bankSyncAt', 0) > 15 * 60e3) syncBanks(true);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
