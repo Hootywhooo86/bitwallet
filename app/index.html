@@ -134,6 +134,10 @@
   .banner{background:color-mix(in srgb,var(--green) 10%,var(--bg));border:3px solid var(--green-deep);color:var(--ink);padding:10px 12px;font-size:13px;line-height:1.5;margin-bottom:14px;display:flex;gap:10px;align-items:center;justify-content:space-between}
   .empty{text-align:center;color:var(--muted);padding:26px 10px;font-size:14px;line-height:1.7}
   .empty .px{display:block;color:var(--green);font-size:10px;margin-bottom:10px}
+  .bank{display:flex;gap:10px;align-items:center;padding:10px 12px;margin-bottom:10px;background:var(--key);border:2px solid var(--line)}
+  .bank .bi{flex:1;min-width:0;text-align:left}
+  .bank .bi b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bank .bi small{color:var(--muted);font-size:12px}
   .hint{font-size:12px;color:var(--muted);line-height:1.6;margin-top:10px;text-align:center}
   .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(200px);background:var(--green);color:var(--bg);font-family:'Press Start 2P',monospace;font-size:10px;padding:12px 16px;box-shadow:0 4px 0 var(--green-deep);transition:transform .25s;z-index:40;max-width:92vw;line-height:1.5}
   .toast.show{transform:translateX(-50%) translateY(0)}
@@ -208,6 +212,13 @@
       <h2>💳 ADD A CARD</h2>
       <button class="pxbtn" id="addCardBtn" style="width:100%;padding:16px">+ ADD PAYMENT CARD</button>
       <p class="hint">bitwallet only keeps a nickname and the last 4 digits. It never asks for your full card number or security code.</p>
+    </div>
+    <div class="card">
+      <h2>🏦 LINKED CARDS &amp; BANKS</h2>
+      <div id="bankList"></div>
+      <button class="pxbtn go" id="linkBankBtn" style="width:100%;padding:16px">🔗 LINK A CARD OR BANK</button>
+      <button class="pxbtn" id="syncBankBtn" style="width:100%;padding:14px;margin-top:12px;display:none">↻ SYNC PURCHASES NOW</button>
+      <p class="hint" id="bankStatus">Sign in to your bank through Plaid and your Visa / Mastercard purchases flow in by themselves, sorted into months and categories. bitwallet gets read-only purchase history and the last 4 digits — never your password or full card number.</p>
     </div>
     <div class="card">
       <h2>⚙ SETTINGS</h2>
@@ -645,14 +656,134 @@ $('budgetBtn').onclick = () => {
 $('budgetSave').onclick = () => { $('budgetList').querySelectorAll('[data-b]').forEach(i => { const v = +i.value; if (v > 0) budgets[i.dataset.b] = v; else delete budgets[i.dataset.b]; }); save(); $('budgetModal').classList.remove('open'); renderAll(); toast('BUDGETS SAVED'); };
 $('currency').innerHTML = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'MXN', 'JPY', 'INR'].map(c => `<option ${c === currency ? 'selected' : ''}>${c}</option>`).join('');
 $('currency').onchange = () => { currency = $('currency').value; store.set('currency', currency); renderAll(); };
-$('wipe').onclick = () => { if (!confirm('Erase every card, pass and transaction on this device?')) return; cards = []; txs = []; passes = []; budgets = {}; store.set('demo', false); save(); renderAll(); toast('WALLET ERASED'); };
+$('wipe').onclick = () => { if (!confirm('Erase every card, pass and transaction on this device?')) return; cards = []; txs = []; passes = []; budgets = {}; store.set('demo', false); store.set('bankCursors', {}); store.set('bankSyncAt', 0); save(); renderAll(); toast('WALLET ERASED'); };
 $('addTxBtn').onclick = () => editTx();
 $('addIncomeBtn').onclick = () => editTx(null, { income: true });
 $('addCardBtn').onclick = () => editCard();
 document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
 
+/* ================= Linked banks (Plaid auto-import) ================= */
+// Plaid secrets and bank access tokens live only in the Supabase edge function.
+// This device proves who it is with a random key; the server keeps only its hash.
+const BANK_API = 'https://wvflpwtaszpstmjpkrhu.supabase.co/functions/v1/wallet-plaid';
+const BANK_PUB = 'sb_publishable_dO8uP74cTV1tbuqESgxysw_323C7lWh';
+let bankLinks = store.get('bankLinks', []), bankBusy = false;
+function deviceKey(){
+  let k = store.get('bankKey', '');
+  if (!/^[a-f0-9]{64}$/.test(k)){ k = [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2, '0')).join(''); store.set('bankKey', k); }
+  return k;
+}
+async function bankCall(action, extra = {}){
+  let r;
+  try {
+    r = await fetch(BANK_API, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: BANK_PUB }, body: JSON.stringify({ action, device_key: deviceKey(), ...extra }) });
+  } catch (e) { throw new Error('No connection to the bank link service. Check your internet.'); }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(data.error || 'Bank link failed (' + r.status + ')'); e.code = data.code; throw e; }
+  return data;
+}
+let plaidLoading;
+function loadPlaid(){
+  return plaidLoading ||= new Promise((ok, bad) => {
+    const sc = document.createElement('script'); sc.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+    sc.onload = () => ok(window.Plaid); sc.onerror = () => { plaidLoading = null; bad(new Error('Could not load Plaid. Check your internet.')); };
+    document.head.appendChild(sc);
+  });
+}
+function bankStatus(msg){ $('bankStatus').textContent = msg; }
+const PFC = { INCOME: 'income', GENERAL_MERCHANDISE: 'shopping', HOME_IMPROVEMENT: 'shopping', TRAVEL: 'travel', RENT_AND_UTILITIES: 'bills', LOAN_PAYMENTS: 'bills', BANK_FEES: 'bills', ENTERTAINMENT: 'fun', MEDICAL: 'health', PERSONAL_CARE: 'health' };
+// Moving money between your own accounts would count the same spending twice.
+const SKIP_PFC = ['LOAN_PAYMENTS_CREDIT_CARD_PAYMENT', 'TRANSFER_IN_ACCOUNT_TRANSFER', 'TRANSFER_OUT_ACCOUNT_TRANSFER'];
+function plaidCat(t, merchant){
+  const learned = store.get('learned', {})[merchant.toLowerCase().trim()];
+  if (learned) return learned;
+  const g = guessCat(merchant);
+  if (g === 'subs') return g;
+  if (t.category === 'FOOD_AND_DRINK') return t.detailed === 'FOOD_AND_DRINK_GROCERIES' ? 'groceries' : 'dining';
+  if (t.category === 'TRANSPORTATION') return String(t.detailed).includes('GAS') ? 'gas' : 'transport';
+  if (t.category === 'GENERAL_SERVICES' && String(t.detailed).includes('INSURANCE')) return 'bills';
+  if (t.amount < 0 && g === 'other') return 'income';
+  return PFC[t.category] || g;
+}
+function plaidBrand(a){ const n = (a.name + ' ' + (a.official_name || '')).toLowerCase(); return /master/.test(n) ? 'MASTERCARD' : /amex|american express/.test(n) ? 'AMEX' : /discover/.test(n) ? 'DISCOVER' : /visa/.test(n) || a.type === 'credit' ? 'VISA' : 'DEBIT'; }
+function applySync(link, r){
+  const accCard = {};
+  (r.accounts || []).filter(a => a.type === 'credit' || a.type === 'depository').forEach(a => {
+    let c = cards.find(c => c.plaidAccountId === a.account_id);
+    if (!c){
+      c = { id: 'c' + Date.now() + Math.floor(Math.random() * 1e4), name: (a.name || link.institution).slice(0, 28), brand: plaidBrand(a), last4: String(a.mask || '').slice(-4), type: a.type === 'credit' ? 'credit' : 'debit', limit: 0, color: COLORS[cards.length % COLORS.length], plaidAccountId: a.account_id, linkId: link.id };
+      cards.push(c); if (cards.length === 1) store.set('defaultCard', c.id);
+    }
+    accCard[a.account_id] = c.id;
+  });
+  const gone = new Set((r.removed || []).map(id => 'plaid_' + id));
+  txs = txs.filter(t => !gone.has(t.id));
+  let added = 0;
+  [...(r.added || []), ...(r.modified || [])].forEach(t => {
+    if (SKIP_PFC.includes(t.detailed)) return;
+    const id = 'plaid_' + t.transaction_id, merchant = (t.merchant_name || t.name || 'Purchase').slice(0, 60);
+    const vals = { amt: -Math.round(t.amount * 100) / 100, merchant, date: t.authorized_date || t.date, card: accCard[t.account_id] || cards.find(c => c.plaidAccountId === t.account_id)?.id || '', note: t.pending ? 'pending' : '' };
+    const ex = txs.find(x => x.id === id);
+    if (ex) { if (ex.note === 'pending' || !ex.note) ex.note = vals.note; Object.assign(ex, { amt: vals.amt, date: vals.date, card: ex.card || vals.card }); }
+    else { txs.push({ id, ...vals, cat: plaidCat(t, merchant), plaid: true }); added++; }
+  });
+  const cur = store.get('bankCursors', {}); cur[link.id] = r.cursor; store.set('bankCursors', cur);
+  link.last_synced = new Date().toISOString();
+  return added;
+}
+async function syncBanks(quiet){
+  if (bankBusy || !bankLinks.length) return;
+  bankBusy = true; if (!quiet) bankStatus('Syncing purchases…');
+  let total = 0, fail = '';
+  for (const link of bankLinks){
+    try { total += applySync(link, await bankCall('sync', { link_id: link.id, cursor: store.get('bankCursors', {})[link.id] || '' })); }
+    catch (e) { fail = `${link.institution}: ${e.message}`; if (e.code === 'NOT_FOUND') bankLinks = bankLinks.filter(l => l !== link); }
+  }
+  bankBusy = false; store.set('bankLinks', bankLinks); store.set('bankSyncAt', Date.now()); save(); renderAll();
+  bankStatus(fail || `Up to date · ${total} new purchase${total === 1 ? '' : 's'} imported.`);
+  if (!quiet || total) toast(fail ? 'SYNC PROBLEM' : total ? `+${total} PURCHASES IMPORTED` : 'ALL UP TO DATE');
+}
+function renderBanks(){
+  $('bankList').innerHTML = bankLinks.map(l => `<div class="bank"><div class="bi"><b>🏦 ${esc(l.institution)}</b><small>${l.last_synced ? 'Synced ' + new Date(l.last_synced).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not synced yet'}</small></div><button class="pxbtn sm warn" data-unlink="${esc(l.id)}">UNLINK</button></div>`).join('');
+  $('syncBankBtn').style.display = bankLinks.length ? '' : 'none';
+  $('bankList').querySelectorAll('[data-unlink]').forEach(b => b.onclick = async () => {
+    const l = bankLinks.find(x => x.id === b.dataset.unlink);
+    if (!confirm(`Unlink ${l.institution}? Purchases already imported stay in your wallet.`)) return;
+    try { await bankCall('unlink', { link_id: l.id }); } catch (e) { if (e.code !== 'NOT_FOUND') return toast(e.message.toUpperCase().slice(0, 40)); }
+    bankLinks = bankLinks.filter(x => x !== l); store.set('bankLinks', bankLinks);
+    cards.forEach(c => { if (c.linkId === l.id) { delete c.plaidAccountId; delete c.linkId; } }); save();
+    renderBanks(); bankStatus(`${l.institution} unlinked.`); toast('BANK UNLINKED');
+  });
+}
+$('linkBankBtn').onclick = async () => {
+  if (bankBusy) return;
+  bankBusy = true; bankStatus('Opening secure bank sign-in…');
+  try {
+    const [{ link_token }, Plaid] = await Promise.all([bankCall('link_token'), loadPlaid()]);
+    bankBusy = false;
+    Plaid.create({
+      token: link_token,
+      onSuccess: async (public_token, meta) => {
+        bankStatus('Linking ' + (meta.institution?.name || 'your bank') + '…');
+        try {
+          const { link } = await bankCall('exchange', { public_token, institution: meta.institution?.name || 'Bank' });
+          bankLinks = bankLinks.filter(l => l.id !== link.id).concat(link); store.set('bankLinks', bankLinks);
+          if (store.get('demo', false)) { txs = txs.filter(t => !t.demo); passes = passes.filter(p => !p.demo); cards = cards.filter(c => !['c1', 'c2'].includes(c.id) || txs.some(t => t.card === c.id)); store.set('demo', false); }
+          await syncBanks();
+        } catch (e) { bankStatus(e.message); toast('LINK FAILED'); }
+      },
+      onExit: err => bankStatus(err ? (err.display_message || err.error_message || 'Bank sign-in closed.') : 'Bank sign-in closed. Nothing was linked.'),
+    }).open();
+  } catch (e) {
+    bankBusy = false;
+    bankStatus(e.code === 'NOT_CONFIGURED' ? 'Bank linking is almost ready — the owner still needs to add the Plaid keys on the server.' : e.message);
+    toast(e.code === 'NOT_CONFIGURED' ? 'NOT SET UP YET' : 'COULD NOT OPEN BANK LINK');
+  }
+};
+$('syncBankBtn').onclick = () => syncBanks(false);
+
 /* ================= Tabs ================= */
-function renderAll(){ renderBanner(); renderSummary(); renderCards(); renderRecent(); renderFilters(); renderMonths(); renderPasses(); }
+function renderAll(){ renderBanner(); renderSummary(); renderCards(); renderRecent(); renderFilters(); renderMonths(); renderPasses(); renderBanks(); }
 function show(v){
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
@@ -661,6 +792,7 @@ function show(v){
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => show(b.dataset.v));
 document.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => show(b.dataset.goto));
 renderAll(); show(store.get('tab', 'wallet'));
+if (Date.now() - store.get('bankSyncAt', 0) > 15 * 60e3) syncBanks(true);
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
