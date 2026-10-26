@@ -24,7 +24,21 @@ A chunky, tangible wallet for the 128bit family: visible balances, tappable card
 - **Security:** PIN, biometrics, spending limits for kids' accounts?
 - **Platform:** iOS/Android/both, native build or wrapped web app?
 
+## The app (`app/`)
+
+Live at https://hootywhooo86.github.io/bitwallet/app/ (installable PWA, works offline, data stays on the device).
+
+- **WALLET**: your payment cards as chunky pixel cards (nickname, network, last 4 only, never the full number or CVV), per-card spending this month vs an optional limit, default card, this month's spending vs the same point last month, money in, net.
+- **⚡ PAY**: pick a card, enter amount + where, and the purchase is logged and auto-categorized (it learns when you correct a category).
+- **SPENDING**: every purchase grouped into **monthly dropdowns**. Each month shows its total, change vs the previous month and a pixel bar of where the money went, then **category sections** (Groceries, Dining, Gas, Shopping, Bills, Subscriptions, Transport, Entertainment, Health, Travel, Other, Money in), each its own dropdown with its transactions. Filter by card or category, set monthly budgets per category (bars go red when over), import a bank CSV, export CSV.
+- **PASSES**: loyalty, membership and gift cards with a scannable Code 128 barcode.
+- Starts with sample data (one tap to clear).
+
+### About "pay for everything"
+
+Real tap-to-pay like Google Wallet needs a native Android app using NFC host card emulation **plus** a card-tokenization deal with Visa/Mastercard through an issuer or a provider (e.g. Stripe Issuing, Marqeta). A web page can't do NFC payments. So today you pay with your physical card and bitwallet logs it in one tap. Bank auto-sync (Plaid, etc.) would fill the dropdowns without manual entry. Both need a backend and are the next big decisions.
+
 ## Status
 
-- Landing page + mock: live (coming-soon).
-- Real app build: not started. Formspree ID still needed in the waitlist form (`YOUR_FORM_ID` placeholder with a local-confirm fallback).
+- Landing page: live, links to the app.
+- App: v1 working (`app/index.html`) as a wallet + spending tracker; NFC payments and bank sync not built (see above).

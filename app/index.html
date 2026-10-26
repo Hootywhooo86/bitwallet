@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b16">
+<title>bitwallet</title>
+<meta name="description" content="bitwallet: your cards, passes and every purchase in a pixel wallet, sorted into monthly spending by category.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0b16;
+    --panel:#141428;
+    --line:#2a2a4a;
+    --key:#1f1f3a;
+    --green:#4ade80;
+    --green-deep:#15803d;
+    --gold:#facc15;
+    --orange:#ff9f1c;
+    --red:#ff5d5d;
+    --ink:#f4f1ff;
+    --muted:#9a97b8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;overflow-x:hidden}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;background-image:radial-gradient(rgba(74,222,128,.07) 1px,transparent 1px);background-size:22px 22px}
+  button{font-family:inherit;color:inherit;cursor:pointer}
+  .px{font-family:'Press Start 2P',monospace}
+  .app{max-width:560px;margin:0 auto;padding:12px 14px 110px;position:relative}
+  header{display:flex;align-items:center;justify-content:space-between;padding:6px 0 14px}
+  .logo{display:flex;align-items:center;gap:10px;font-family:'Press Start 2P',monospace;font-size:12px}
+  .logo i{width:28px;height:28px;background:var(--green);display:grid;place-items:center;font-style:normal;font-size:14px;box-shadow:0 3px 0 var(--green-deep)}
+  .view{display:none}.view.on{display:block}
+  .card{background:var(--panel);border:3px solid var(--line);padding:14px;box-shadow:6px 6px 0 #000;margin-bottom:14px}
+  h2{font-family:'Press Start 2P',monospace;font-size:10px;color:var(--green);margin-bottom:12px;line-height:1.6;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .muted{color:var(--muted)}
+  .pxbtn{font-family:'Press Start 2P',monospace;font-size:9px;padding:12px 14px;background:var(--key);border:none;box-shadow:0 4px 0 #000}
+  .pxbtn:active{transform:translateY(3px);box-shadow:0 1px 0 #000}
+  .pxbtn.go{background:var(--green);color:var(--bg);box-shadow:0 4px 0 var(--green-deep)}
+  .pxbtn.warn{background:var(--red);color:var(--bg);box-shadow:0 4px 0 #991b1b}
+  .pxbtn.sm{font-size:8px;padding:8px 10px}
+  input,select{background:var(--bg);border:3px solid var(--line);color:var(--ink);font-size:15px;padding:10px;font-family:'Inter',sans-serif;width:100%;border-radius:0;color-scheme:dark}
+  input:focus,select:focus{outline:none;border-color:var(--green)}
+  label.f{display:block;font-family:'Press Start 2P',monospace;font-size:8px;color:var(--muted);margin:12px 0 6px}
+  .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+  .rowflex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  /* tabs */
+  .tabs{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:3px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);z-index:8;padding-bottom:env(safe-area-inset-bottom)}
+  .tabs button{background:none;border:none;padding:10px 0 12px;font-family:'Press Start 2P',monospace;font-size:7px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:7px}
+  .tabs button span{font-size:18px;font-family:system-ui}
+  .tabs button.on{color:var(--green)}
+  /* balance summary */
+  .summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .summary div{background:var(--panel);border:3px solid var(--line);padding:12px;box-shadow:4px 4px 0 #000}
+  .summary span{display:block;font-family:'Press Start 2P',monospace;font-size:7px;color:var(--muted);margin-bottom:8px;line-height:1.5}
+  .summary b{font-family:'Press Start 2P',monospace;font-size:15px}
+  .summary small{display:block;font-size:12px;margin-top:6px}
+  /* pay cards */
+  .stack{display:flex;flex-direction:column;gap:12px}
+  .pcard{position:relative;aspect-ratio:1.586;padding:18px;color:#fff;border:3px solid rgba(0,0,0,.35);box-shadow:6px 6px 0 #000;cursor:pointer;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;text-align:left;width:100%}
+  .pcard::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.06) 0 8px,transparent 8px 16px);pointer-events:none}
+  .pcard .top{display:flex;justify-content:space-between;align-items:flex-start;position:relative}
+  .pcard .nm{font-family:'Press Start 2P',monospace;font-size:12px;line-height:1.5;text-shadow:2px 2px 0 rgba(0,0,0,.35)}
+  .pcard .brand{font-family:'Press Start 2P',monospace;font-size:10px;background:rgba(0,0,0,.3);padding:6px 8px}
+  .pcard .chip{width:42px;height:32px;background:linear-gradient(135deg,#fde68a,#d97706);border:2px solid rgba(0,0,0,.3);position:relative}
+  .pcard .num{font-family:'Press Start 2P',monospace;font-size:14px;letter-spacing:2px;position:relative;text-shadow:2px 2px 0 rgba(0,0,0,.35)}
+  .pcard .bot{display:flex;justify-content:space-between;align-items:flex-end;font-size:12px;position:relative}
+  .pcard .bot b{font-family:'Press Start 2P',monospace;font-size:10px;line-height:1.7;text-align:right}
+  .pcard.default::after{content:"DEFAULT";position:absolute;top:0;left:50%;transform:translateX(-50%);font-family:'Press Start 2P',monospace;font-size:7px;background:var(--gold);color:var(--bg);padding:4px 6px}
+  .addcard{border:3px dashed var(--line);background:none;padding:22px;font-family:'Press Start 2P',monospace;font-size:9px;color:var(--muted);width:100%}
+  /* transactions */
+  .tx{display:grid;grid-template-columns:auto 1fr auto;gap:2px 12px;align-items:center;padding:10px 0;border-bottom:2px dashed var(--line);cursor:pointer}
+  .tx:last-child{border-bottom:none}
+  .tx .ic{grid-row:span 2;width:36px;height:36px;display:grid;place-items:center;font-size:17px}
+  .tx .m{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tx .a{font-family:'Press Start 2P',monospace;font-size:11px;text-align:right}
+  .tx .a.in{color:var(--green)}
+  .tx .s{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tx .d{font-size:11px;color:var(--muted);text-align:right}
+  /* month dropdowns */
+  details.month{background:var(--panel);border:3px solid var(--line);box-shadow:6px 6px 0 #000;margin-bottom:14px}
+  details.month>summary{list-style:none;cursor:pointer;padding:14px;display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:center}
+  details.month>summary::-webkit-details-marker{display:none}
+  details.month>summary .arrow{font-family:'Press Start 2P',monospace;font-size:10px;color:var(--green);transition:transform .15s;grid-row:span 2}
+  details.month[open]>summary .arrow{transform:rotate(90deg)}
+  details.month>summary .mn{font-family:'Press Start 2P',monospace;font-size:11px}
+  details.month>summary .tot{font-family:'Press Start 2P',monospace;font-size:13px;color:var(--orange);text-align:right}
+  details.month>summary .sub{font-size:12px;color:var(--muted)}
+  details.month>summary .delta{font-size:12px;text-align:right}
+  .up{color:var(--red)} .down{color:var(--green)}
+  .mbody{padding:0 14px 14px;border-top:3px solid var(--line)}
+  .pixbar{display:flex;height:18px;margin:14px 0 10px;border:3px solid var(--bg);background:var(--bg)}
+  .pixbar i{display:block;height:100%}
+  details.cat{border:2px solid var(--line);margin-top:10px;background:var(--bg)}
+  details.cat>summary{list-style:none;cursor:pointer;padding:11px 12px;display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center}
+  details.cat>summary::-webkit-details-marker{display:none}
+  details.cat>summary .sw{width:14px;height:14px;grid-row:span 2}
+  details.cat>summary .cn{font-size:14px;font-weight:600}
+  details.cat>summary .cv{font-family:'Press Start 2P',monospace;font-size:10px;text-align:right}
+  details.cat>summary .cm{font-size:11px;color:var(--muted)}
+  details.cat>summary .cb{grid-column:2/4;height:6px;background:var(--panel)}
+  details.cat>summary .cb i{display:block;height:100%}
+  details.cat>summary .cb i.over{background:var(--red) !important}
+  details.cat .list{padding:0 12px 6px}
+  .filters{display:flex;gap:8px;margin-bottom:14px}
+  .filters select{flex:1;font-size:13px;padding:8px}
+  /* passes */
+  .pass{border:3px solid rgba(0,0,0,.35);box-shadow:6px 6px 0 #000;padding:16px;color:#fff;margin-bottom:12px;cursor:pointer;position:relative}
+  .pass .pn{font-family:'Press Start 2P',monospace;font-size:11px;line-height:1.5;text-shadow:2px 2px 0 rgba(0,0,0,.35)}
+  .pass .pt{font-size:12px;opacity:.85;margin-top:6px}
+  .pass .pc{position:absolute;right:16px;top:16px;font-size:24px}
+  .barcode{background:#fff;padding:14px;margin-top:12px;text-align:center}
+  .barcode canvas{max-width:100%;image-rendering:pixelated;display:block;margin:0 auto}
+  .barcode div{font-family:'Press Start 2P',monospace;font-size:11px;color:#0b0b16;margin-top:10px;letter-spacing:2px;word-break:break-all}
+  /* modals */
+  .modal{position:fixed;inset:0;background:rgba(5,5,12,.88);display:none;align-items:flex-end;justify-content:center;z-index:25}
+  .modal.open{display:flex}
+  .sheet{background:var(--panel);border:3px solid var(--line);border-bottom:none;width:100%;max-width:560px;padding:18px 16px 26px;max-height:94dvh;overflow-y:auto}
+  .sheet .btns{display:flex;gap:10px;margin-top:18px;justify-content:flex-end;flex-wrap:wrap}
+  .amt{font-family:'Press Start 2P',monospace;font-size:28px !important;text-align:center;padding:16px !important}
+  .catpick{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .catpick button{background:var(--bg);border:3px solid var(--line);padding:8px 2px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:4px}
+  .catpick button span{font-size:18px}
+  .catpick button.on{border-color:var(--green);background:#0f2a1a}
+  .swatches{display:flex;gap:8px;flex-wrap:wrap}
+  .swatches button{width:34px;height:34px;border:3px solid var(--bg)}
+  .swatches button.on{border-color:var(--ink)}
+  .paying{text-align:center}
+  .paying .ring{font-size:64px;margin:20px 0 10px;animation:pulse 1s steps(2) infinite}
+  @keyframes pulse{50%{transform:scale(1.15)}}
+  .paying .ok{font-family:'Press Start 2P',monospace;font-size:14px;color:var(--green);margin:14px 0;line-height:1.6}
+  .banner{background:#1a2a12;border:3px solid var(--green-deep);color:var(--ink);padding:10px 12px;font-size:13px;line-height:1.5;margin-bottom:14px;display:flex;gap:10px;align-items:center;justify-content:space-between}
+  .empty{text-align:center;color:var(--muted);padding:26px 10px;font-size:14px;line-height:1.7}
+  .empty .px{display:block;color:var(--green);font-size:10px;margin-bottom:10px}
+  .hint{font-size:12px;color:var(--muted);line-height:1.6;margin-top:10px}
+  .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(200px);background:var(--green);color:var(--bg);font-family:'Press Start 2P',monospace;font-size:10px;padding:12px 16px;box-shadow:0 4px 0 var(--green-deep);transition:transform .25s;z-index:40;max-width:92vw;line-height:1.5}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo"><i>💳</i>bitwallet</div>
+    <button class="pxbtn go sm" id="quickPay">⚡ PAY</button>
+  </header>
+  <div id="banner"></div>
+
+  <!-- WALLET -->
+  <section class="view" id="v-wallet">
+    <div class="summary" id="summary"></div>
+    <div class="card">
+      <h2>💳 PAYMENT CARDS</h2>
+      <div class="stack" id="cards"></div>
+    </div>
+    <div class="card">
+      <h2>RECENT <button class="pxbtn sm" data-goto="spend">ALL ▶</button></h2>
+      <div id="recent"></div>
+    </div>
+  </section>
+
+  <!-- SPENDING -->
+  <section class="view" id="v-spend">
+    <div class="filters">
+      <select id="fCard" aria-label="Filter by card"></select>
+      <select id="fCat" aria-label="Filter by category"></select>
+    </div>
+    <div id="months"></div>
+    <div class="card">
+      <h2>🗃 DATA</h2>
+      <div class="rowflex">
+        <label class="pxbtn" for="csvIn" style="cursor:pointer">⬆ IMPORT CSV</label>
+        <input type="file" id="csvIn" accept=".csv,text/csv" hidden>
+        <button class="pxbtn" id="csvOut">⬇ EXPORT CSV</button>
+        <button class="pxbtn" id="budgetBtn">🎯 BUDGETS</button>
+      </div>
+      <p class="hint">Import a statement from your bank (most banks offer CSV download). bitwallet finds the date, description and amount columns and sorts every purchase into a category automatically.</p>
+    </div>
+  </section>
+
+  <!-- PASSES -->
+  <section class="view" id="v-passes">
+    <div class="card">
+      <h2>🎟 PASSES &amp; LOYALTY <button class="pxbtn sm go" id="addPass">+ ADD</button></h2>
+      <div id="passes"></div>
+      <p class="hint">Store loyalty, membership and gift cards. Tap one to show its barcode at the register.</p>
+    </div>
+  </section>
+
+  <!-- ADD -->
+  <section class="view" id="v-add">
+    <div class="card">
+      <h2>➕ LOG A PURCHASE</h2>
+      <button class="pxbtn go" id="addTxBtn" style="width:100%;padding:16px">+ NEW TRANSACTION</button>
+      <button class="pxbtn" id="addIncomeBtn" style="width:100%;padding:16px;margin-top:12px">+ MONEY IN (PAYCHECK, REFUND)</button>
+    </div>
+    <div class="card">
+      <h2>💳 ADD A CARD</h2>
+      <button class="pxbtn" id="addCardBtn" style="width:100%;padding:16px">+ ADD PAYMENT CARD</button>
+      <p class="hint">bitwallet only keeps a nickname and the last 4 digits. It never asks for your full card number or security code.</p>
+    </div>
+    <div class="card">
+      <h2>⚙ SETTINGS</h2>
+      <label class="f">CURRENCY</label>
+      <select id="currency"></select>
+      <div class="rowflex" style="margin-top:16px">
+        <button class="pxbtn warn" id="wipe">ERASE ALL DATA</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<nav class="tabs">
+  <button data-v="wallet"><span>💳</span>WALLET</button>
+  <button data-v="spend"><span>📊</span>SPENDING</button>
+  <button data-v="passes"><span>🎟</span>PASSES</button>
+  <button data-v="add"><span>➕</span>ADD</button>
+</nav>
+
+<!-- transaction editor -->
+<div class="modal" id="txModal"><div class="sheet">
+  <h2 id="txTitle">NEW PURCHASE</h2>
+  <input id="txAmt" class="amt" type="text" inputmode="decimal" placeholder="0.00" aria-label="Amount">
+  <label class="f">WHERE</label>
+  <input id="txMerchant" placeholder="e.g. Kroger, Shell, Netflix" autocomplete="off" list="merchants">
+  <datalist id="merchants"></datalist>
+  <label class="f">CATEGORY</label>
+  <div class="catpick" id="txCats"></div>
+  <div class="grid2">
+    <div><label class="f">CARD</label><select id="txCard"></select></div>
+    <div><label class="f">DATE</label><input id="txDate" type="date"></div>
+  </div>
+  <label class="f">NOTE</label>
+  <input id="txNote" placeholder="Optional">
+  <div class="btns"><button class="pxbtn warn" id="txDelete">DELETE</button><button class="pxbtn" id="txCancel">CANCEL</button><button class="pxbtn go" id="txSave">SAVE</button></div>
+</div></div>
+
+<!-- card editor -->
+<div class="modal" id="cardModal"><div class="sheet">
+  <h2 id="cardTitle">ADD CARD</h2>
+  <label class="f">NICKNAME</label>
+  <input id="cName" placeholder="e.g. Everyday Debit">
+  <div class="grid2">
+    <div><label class="f">NETWORK</label><select id="cBrand"><option>VISA</option><option>MASTERCARD</option><option>AMEX</option><option>DISCOVER</option><option>DEBIT</option><option>OTHER</option></select></div>
+    <div><label class="f">LAST 4 DIGITS</label><input id="cLast4" inputmode="numeric" maxlength="4" placeholder="1234"></div>
+  </div>
+  <div class="grid2">
+    <div><label class="f">TYPE</label><select id="cType"><option value="debit">Debit</option><option value="credit">Credit</option><option value="cash">Cash</option></select></div>
+    <div><label class="f">MONTHLY LIMIT</label><input id="cLimit" type="number" placeholder="Optional"></div>
+  </div>
+  <label class="f">COLOR</label>
+  <div class="swatches" id="cColors"></div>
+  <div class="btns"><button class="pxbtn" id="cDefault">★ MAKE DEFAULT</button><button class="pxbtn warn" id="cDelete">DELETE</button><button class="pxbtn" id="cCancel">CANCEL</button><button class="pxbtn go" id="cSave">SAVE</button></div>
+</div></div>
+
+<!-- pay screen -->
+<div class="modal" id="payModal"><div class="sheet paying" id="paySheet"></div></div>
+
+<!-- pass editor / viewer -->
+<div class="modal" id="passModal"><div class="sheet" id="passSheet"></div></div>
+
+<!-- budgets -->
+<div class="modal" id="budgetModal"><div class="sheet">
+  <h2>🎯 MONTHLY BUDGETS</h2>
+  <p class="hint" style="margin-top:0">Set a monthly cap per category. Bars turn red in the month dropdowns when you go over.</p>
+  <div id="budgetList"></div>
+  <div class="btns"><button class="pxbtn go" id="budgetSave">SAVE</button></div>
+</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= Basics ================= */
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d){ try { const v = localStorage.getItem('bitwallet.' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v){ try { localStorage.setItem('bitwallet.' + k, JSON.stringify(v)); } catch {} }
+};
+function esc(s){ return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+let toastTimer;
+function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400); }
+let currency = store.get('currency', 'USD');
+const money = (n, sign) => { const s = new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(Math.abs(n)); return sign && n > 0 ? '+' + s : (n < 0 && !sign ? '-' : '') + s; };
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const parseYmd = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const monthKey = s => s.slice(0, 7);
+const monthName = k => parseYmd(k + '-01').toLocaleDateString([], { month: 'long', year: 'numeric' });
+
+/* ================= Categories ================= */
+const CATS = {
+  groceries: { n: 'Groceries', i: '🛒', c: '#4ade80', k: ['kroger','walmart','aldi','safeway','publix','whole foods','trader joe','costco','grocery','market','heb','meijer','food lion','wegmans','sprouts','instacart'] },
+  dining: { n: 'Dining', i: '🍔', c: '#ff9f1c', k: ['restaurant','mcdonald','starbucks','chipotle','pizza','cafe','coffee','taco','burger','wendy','subway','doordash','uber eats','grubhub','diner','grill','kitchen','chick-fil','dunkin','panera','bakery','donut','bar '] },
+  gas: { n: 'Gas', i: '⛽', c: '#facc15', k: ['shell','exxon','chevron','bp ','marathon','speedway','sunoco','gas','fuel','circle k','wawa','sheetz','valero','mobil','citgo','racetrac'] },
+  shopping: { n: 'Shopping', i: '🛍', c: '#ff5d8f', k: ['amazon','target','best buy','ebay','etsy','store','shop','mall','home depot','lowe','ikea','apple store','nike','clothing','macy','tj maxx','marshalls','kohl'] },
+  bills: { n: 'Bills', i: '🧾', c: '#38bdf8', k: ['electric','power','water','utility','internet','comcast','xfinity','verizon','at&t','t-mobile','insurance','rent','mortgage','phone','energy','geico','progressive','state farm'] },
+  subs: { n: 'Subscriptions', i: '🔁', c: '#a78bfa', k: ['netflix','spotify','hulu','disney','youtube','apple.com','icloud','prime','patreon','xbox','playstation','nintendo','adobe','openai','audible','paramount','max.com','hbo'] },
+  transport: { n: 'Transport', i: '🚌', c: '#2dd4bf', k: ['uber','lyft','transit','metro','parking','toll','train','amtrak','bus','taxi','bird','lime'] },
+  fun: { n: 'Entertainment', i: '🎮', c: '#fb7185', k: ['movie','cinema','amc','theater','concert','ticket','steam','game','bowling','arcade','museum','zoo','sport'] },
+  health: { n: 'Health', i: '💊', c: '#f472b6', k: ['pharmacy','cvs','walgreens','rite aid','doctor','dental','clinic','hospital','gym','fitness','planet fitness','medical','vision'] },
+  travel: { n: 'Travel', i: '✈️', c: '#60a5fa', k: ['airline','airbnb','hotel','delta','united','american air','southwest','expedia','booking.com','marriott','hilton','motel','resort'] },
+  other: { n: 'Other', i: '📦', c: '#9a97b8', k: [] },
+  income: { n: 'Money in', i: '💰', c: '#22c55e', k: ['payroll','paycheck','salary','deposit','refund','venmo from','zelle from','transfer from','interest'] }
+};
+function guessCat(merchant){
+  const m = ' ' + String(merchant).toLowerCase() + ' ';
+  const learned = store.get('learned', {})[m.trim()];
+  if (learned) return learned;
+  for (const [id, c] of Object.entries(CATS)) if (c.k.some(k => m.includes(k))) return id;
+  return 'other';
+}
+function learn(merchant, cat){ const l = store.get('learned', {}); l[String(merchant).toLowerCase().trim()] = cat; store.set('learned', l); }
+
+/* ================= Data ================= */
+const COLORS = ['#15803d', '#1d4ed8', '#7c3aed', '#be123c', '#c2410c', '#0f766e', '#334155', '#a16207'];
+let cards = store.get('cards', null), txs = store.get('txs', null), passes = store.get('passes', null), budgets = store.get('budgets', {});
+if (cards === null){
+  // First run: seed sample data so the dropdowns have something to show. Flagged demo so it can be cleared in one tap.
+  cards = [{ id: 'c1', name: 'Everyday Debit', brand: 'VISA', last4: '4821', type: 'debit', color: '#15803d', limit: 0 }, { id: 'c2', name: 'Rewards Card', brand: 'MASTERCARD', last4: '0937', type: 'credit', color: '#7c3aed', limit: 1500 }];
+  store.set('defaultCard', 'c1');
+  const S = [['Kroger', 84.12], ['Shell', 41.5], ['Starbucks', 6.25], ['Netflix', 15.49], ['Amazon', 39.99], ['Chipotle', 12.8], ['Electric Co', 96.4], ['Walmart', 63.17], ['Uber', 18.6], ['AMC Theaters', 28], ['CVS Pharmacy', 14.29], ['Spotify', 11.99], ['Target', 52.4], ['Pizza Hut', 24.5], ['Exxon', 38.9], ['Trader Joe\'s', 47.33], ['Planet Fitness', 24.99], ['Steam', 19.99]];
+  txs = []; let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  const now = new Date();
+  for (let mo = 0; mo < 3; mo++){
+    const days = mo === 0 ? now.getDate() : new Date(now.getFullYear(), now.getMonth() - mo + 1, 0).getDate();
+    S.forEach(([m, a], i) => {
+      if (mo === 0 && i % 3 === 2) return;
+      const d = new Date(now.getFullYear(), now.getMonth() - mo, 1 + Math.floor(rnd() * days));
+      txs.push({ id: 'd' + mo + '_' + i, amt: -Math.round(a * (0.8 + rnd() * 0.5) * 100) / 100, merchant: m, cat: guessCat(m), card: i % 3 ? 'c1' : 'c2', date: ymd(d), note: '', demo: true });
+    });
+    txs.push({ id: 'p' + mo, amt: 1850, merchant: 'Payroll deposit', cat: 'income', card: 'c1', date: ymd(new Date(now.getFullYear(), now.getMonth() - mo, 1)), note: '', demo: true });
+  }
+  passes = [{ id: 'p1', name: 'Kroger Plus', type: 'Loyalty', code: '4800012345678', color: '#1d4ed8', icon: '🛒', demo: true }, { id: 'p2', name: 'Library Card', type: 'Membership', code: 'LIB-2026-0042', color: '#c2410c', icon: '📚', demo: true }];
+  store.set('demo', true); save();
+}
+function save(){ store.set('cards', cards); store.set('txs', txs); store.set('passes', passes); store.set('budgets', budgets); }
+const cardById = id => cards.find(c => c.id === id);
+
+/* ================= Wallet view ================= */
+function renderBanner(){
+  $('banner').innerHTML = store.get('demo', false) ? `<div class="banner"><span>👋 This is sample data so you can look around. Clear it when you're ready to track your own spending.</span><button class="pxbtn sm warn" id="clearDemo">CLEAR</button></div>` : '';
+  const b = $('clearDemo'); if (b) b.onclick = () => { txs = txs.filter(t => !t.demo); passes = passes.filter(p => !p.demo); store.set('demo', false); save(); renderAll(); toast('SAMPLE DATA CLEARED'); };
+}
+function renderSummary(){
+  const now = new Date(), cur = ymd(now).slice(0, 7), prevD = new Date(now.getFullYear(), now.getMonth() - 1, 1), prev = ymd(prevD).slice(0, 7);
+  const spent = k => -txs.filter(t => monthKey(t.date) === k && t.amt < 0).reduce((a, t) => a + t.amt, 0);
+  const inc = k => txs.filter(t => monthKey(t.date) === k && t.amt > 0).reduce((a, t) => a + t.amt, 0);
+  // Compare to the same point in last month, not the whole month, so day 3 isn't "way under".
+  const prevSoFar = -txs.filter(t => monthKey(t.date) === prev && t.amt < 0 && parseYmd(t.date).getDate() <= now.getDate()).reduce((a, t) => a + t.amt, 0);
+  const s = spent(cur), diff = s - prevSoFar;
+  $('summary').innerHTML = `
+    <div><span>SPENT IN ${now.toLocaleDateString([], { month: 'short' }).toUpperCase()}</span><b style="color:var(--orange)">${money(s)}</b><small class="${diff > 0 ? 'up' : 'down'}">${prevSoFar ? `${diff > 0 ? '▲' : '▼'} ${money(Math.abs(diff))} vs last month` : 'First month tracked'}</small></div>
+    <div><span>MONEY IN</span><b style="color:var(--green)">${money(inc(cur))}</b><small class="muted">Net ${money(inc(cur) - s, true)}</small></div>`;
+}
+function cardSpend(id){ const k = ymd(new Date()).slice(0, 7); return -txs.filter(t => t.card === id && monthKey(t.date) === k && t.amt < 0).reduce((a, t) => a + t.amt, 0); }
+function renderCards(){
+  const def = store.get('defaultCard', cards[0]?.id);
+  $('cards').innerHTML = cards.map(c => `
+    <button class="pcard ${c.id === def ? 'default' : ''}" data-card="${c.id}" style="background:${c.color}">
+      <div class="top"><div class="nm">${esc(c.name)}</div><div class="brand">${esc(c.brand)}</div></div>
+      <div class="chip"></div>
+      <div class="num">•••• ${esc(c.last4 || '----')}</div>
+      <div class="bot"><span>${c.type.toUpperCase()} · this month</span><b>${money(cardSpend(c.id))}${c.limit ? ' / ' + money(c.limit) : ''}</b></div>
+    </button>`).join('') + '<button class="addcard" id="addCard2">+ ADD A CARD</button>';
+  $('cards').querySelectorAll('[data-card]').forEach(b => b.onclick = () => openPay(b.dataset.card));
+  $('addCard2').onclick = () => editCard();
+}
+function txRow(t){
+  const c = CATS[t.cat] || CATS.other, card = cardById(t.card);
+  return `<div class="tx" data-tx="${t.id}"><div class="ic" style="background:${c.c}33">${c.i}</div><div class="m">${esc(t.merchant)}</div><div class="a ${t.amt > 0 ? 'in' : ''}">${money(t.amt, true)}</div><div class="s">${c.n}${card ? ' · ' + esc(card.name) : ''}${t.note ? ' · ' + esc(t.note) : ''}</div><div class="d">${parseYmd(t.date).toLocaleDateString([], { month: 'short', day: 'numeric' })}</div></div>`;
+}
+function bindTx(root){ root.querySelectorAll('[data-tx]').forEach(r => r.onclick = () => editTx(txs.find(t => t.id === r.dataset.tx))); }
+function renderRecent(){
+  const r = [...txs].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)).slice(0, 6);
+  $('recent').innerHTML = r.length ? r.map(txRow).join('') : '<div class="empty"><span class="px">NO PURCHASES YET</span>Tap ⚡ PAY or a card to log one.</div>';
+  bindTx($('recent'));
+}
+
+/* ================= Spending: monthly dropdowns ================= */
+let openMonths = new Set(store.get('openMonths', [ymd(new Date()).slice(0, 7)]));
+function renderFilters(){
+  const fc = $('fCard').value || 'all', fk = $('fCat').value || 'all';
+  $('fCard').innerHTML = '<option value="all">All cards</option>' + cards.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  $('fCat').innerHTML = '<option value="all">All categories</option>' + Object.entries(CATS).map(([id, c]) => `<option value="${id}">${c.i} ${c.n}</option>`).join('');
+  $('fCard').value = cards.some(c => c.id === fc) ? fc : 'all'; $('fCat').value = fk;
+}
+function renderMonths(){
+  const fc = $('fCard').value, fk = $('fCat').value;
+  const list = txs.filter(t => (fc === 'all' || t.card === fc) && (fk === 'all' || t.cat === fk));
+  const byMonth = {}; list.forEach(t => (byMonth[monthKey(t.date)] ||= []).push(t));
+  const keys = Object.keys(byMonth).sort().reverse();
+  if (!keys.length){ $('months').innerHTML = '<div class="card empty"><span class="px">NOTHING TO SHOW</span>Log a purchase or import a CSV to fill your months.</div>'; return; }
+  const spentOf = arr => -arr.filter(t => t.amt < 0).reduce((a, t) => a + t.amt, 0);
+  $('months').innerHTML = keys.map((k, idx) => {
+    const arr = byMonth[k], spent = spentOf(arr), income = arr.filter(t => t.amt > 0).reduce((a, t) => a + t.amt, 0);
+    const prevK = keys[idx + 1], prevSpent = prevK && prevK === ymd(new Date(parseYmd(k + '-01').getFullYear(), parseYmd(k + '-01').getMonth() - 1, 1)).slice(0, 7) ? spentOf(byMonth[prevK]) : null;
+    const byCat = {}; arr.forEach(t => (byCat[t.cat] ||= []).push(t));
+    const cats = Object.entries(byCat).map(([id, ts]) => ({ id, ts: ts.sort((a, b) => b.date.localeCompare(a.date)), total: id === 'income' ? ts.reduce((a, t) => a + t.amt, 0) : spentOf(ts) })).sort((a, b) => (a.id === 'income') - (b.id === 'income') || b.total - a.total);
+    const top = Math.max(...cats.filter(c => c.id !== 'income').map(c => c.total), 1);
+    const delta = prevSpent !== null && prevSpent > 0 ? (spent - prevSpent) / prevSpent * 100 : null;
+    return `<details class="month" data-m="${k}" ${openMonths.has(k) ? 'open' : ''}>
+      <summary><span class="arrow">▶</span><span class="mn">${monthName(k).toUpperCase()}</span><span class="tot">${money(spent)}</span>
+        <span class="sub">${arr.length} transaction${arr.length === 1 ? '' : 's'}${income ? ' · ' + money(income, true) + ' in' : ''}</span>
+        <span class="delta ${delta > 0 ? 'up' : 'down'}">${delta === null ? '' : (delta > 0 ? '▲ ' : '▼ ') + Math.abs(delta).toFixed(0) + '% vs prev'}</span></summary>
+      <div class="mbody">
+        <div class="pixbar">${cats.filter(c => c.id !== 'income' && c.total > 0).map(c => `<i style="width:${c.total / spent * 100}%;background:${CATS[c.id].c}" title="${CATS[c.id].n}"></i>`).join('')}</div>
+        ${cats.map(c => {
+          const C = CATS[c.id] || CATS.other, b = budgets[c.id], over = b && c.total > b;
+          return `<details class="cat"><summary><span class="sw" style="background:${C.c}"></span><span class="cn">${C.i} ${C.n}</span><span class="cv" style="color:${c.id === 'income' ? 'var(--green)' : over ? 'var(--red)' : 'var(--ink)'}">${c.id === 'income' ? money(c.total, true) : money(c.total)}</span>
+            <span class="cm">${c.ts.length} item${c.ts.length === 1 ? '' : 's'}${c.id !== 'income' && spent ? ' · ' + (c.total / spent * 100).toFixed(0) + '% of month' : ''}${b ? ` · budget ${money(b)}${over ? ' — OVER' : ''}` : ''}</span>
+            ${c.id !== 'income' ? `<span class="cb"><i class="${over ? 'over' : ''}" style="width:${Math.min(100, b ? c.total / b * 100 : c.total / top * 100)}%;background:${C.c}"></i></span>` : ''}</summary>
+            <div class="list">${c.ts.map(txRow).join('')}</div></details>`;
+        }).join('')}
+      </div></details>`;
+  }).join('');
+  $('months').querySelectorAll('details.month').forEach(d => d.addEventListener('toggle', () => { d.open ? openMonths.add(d.dataset.m) : openMonths.delete(d.dataset.m); store.set('openMonths', [...openMonths]); }));
+  bindTx($('months'));
+}
+$('fCard').onchange = renderMonths; $('fCat').onchange = renderMonths;
+
+/* ================= Transaction editor ================= */
+let editingTx = null, txCat = 'other', catTouched = false, txSign = -1;
+function catButtons(sel){
+  const ids = Object.keys(CATS).filter(id => txSign > 0 ? id === 'income' || id === 'other' : id !== 'income');
+  $('txCats').innerHTML = ids.map(id => `<button data-c="${id}" class="${id === sel ? 'on' : ''}"><span>${CATS[id].i}</span>${CATS[id].n}</button>`).join('');
+  $('txCats').querySelectorAll('button').forEach(b => b.onclick = () => { txCat = b.dataset.c; catTouched = true; catButtons(txCat); });
+}
+function cardOptions(sel){ return cards.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.name)} ••${esc(c.last4)}</option>`).join('') + `<option value="" ${!sel ? 'selected' : ''}>No card / cash</option>`; }
+function editTx(t, opts = {}){
+  editingTx = t || null; txSign = t ? Math.sign(t.amt) || -1 : (opts.income ? 1 : -1);
+  $('txTitle').textContent = t ? 'EDIT TRANSACTION' : txSign > 0 ? 'MONEY IN' : 'NEW PURCHASE';
+  $('txAmt').value = t ? Math.abs(t.amt).toFixed(2) : (opts.amt || '');
+  $('txMerchant').value = t ? t.merchant : (opts.merchant || '');
+  txCat = t ? t.cat : (txSign > 0 ? 'income' : 'other'); catTouched = !!t;
+  catButtons(txCat);
+  $('txCard').innerHTML = cardOptions(t ? t.card : (opts.card || store.get('defaultCard', cards[0]?.id)));
+  $('txDate').value = t ? t.date : ymd(new Date());
+  $('txNote').value = t ? t.note : '';
+  $('txDelete').style.display = t ? '' : 'none';
+  $('merchants').innerHTML = [...new Set(txs.map(x => x.merchant))].slice(0, 200).map(m => `<option value="${esc(m)}">`).join('');
+  $('txModal').classList.add('open');
+  setTimeout(() => (t ? $('txMerchant') : $('txAmt')).focus(), 50);
+}
+$('txMerchant').addEventListener('input', () => { if (!catTouched && txSign < 0){ txCat = guessCat($('txMerchant').value); catButtons(txCat); } });
+$('txCancel').onclick = () => $('txModal').classList.remove('open');
+$('txDelete').onclick = () => { txs = txs.filter(t => t !== editingTx); save(); $('txModal').classList.remove('open'); renderAll(); toast('DELETED'); };
+$('txSave').onclick = () => {
+  const amt = parseFloat($('txAmt').value.replace(/[^0-9.]/g, ''));
+  if (!(amt > 0)) return toast('ENTER AN AMOUNT');
+  const merchant = $('txMerchant').value.trim() || (txSign > 0 ? 'Money in' : 'Purchase');
+  const vals = { amt: Math.round(amt * 100) / 100 * txSign, merchant, cat: txCat, card: $('txCard').value, date: $('txDate').value || ymd(new Date()), note: $('txNote').value.trim() };
+  if (catTouched) learn(merchant, txCat);
+  if (editingTx) Object.assign(editingTx, vals, { demo: false }); else txs.push({ id: 't' + Date.now(), ...vals });
+  openMonths.add(monthKey(vals.date)); store.set('openMonths', [...openMonths]);
+  save(); $('txModal').classList.remove('open'); renderAll();
+  checkBudget(vals);
+  toast(editingTx ? 'SAVED' : txSign > 0 ? 'MONEY IN +' + money(amt) : `${CATS[txCat].i} LOGGED ${money(amt)}`);
+};
+function checkBudget(t){
+  const b = budgets[t.cat]; if (!b || t.amt > 0) return;
+  const k = monthKey(t.date), total = -txs.filter(x => x.cat === t.cat && monthKey(x.date) === k && x.amt < 0).reduce((a, x) => a + x.amt, 0);
+  if (total > b) setTimeout(() => toast(`⚠ OVER ${CATS[t.cat].n.toUpperCase()} BUDGET BY ${money(total - b)}`), 2500);
+  else if (total > b * 0.8) setTimeout(() => toast(`${CATS[t.cat].n.toUpperCase()}: ${money(b - total)} LEFT`), 2500);
+}
+
+/* ================= Pay screen ================= */
+// The pay screen presents the card at the register and logs the purchase. Tap-to-pay over NFC
+// needs a native app with bank tokenization, so the charge itself still runs on your physical card.
+function openPay(id){
+  const c = cardById(id || store.get('defaultCard', cards[0]?.id));
+  if (!c){ toast('ADD A CARD FIRST'); return editCard(); }
+  $('paySheet').innerHTML = `
+    <h2>⚡ PAY WITH</h2>
+    <div class="pcard" style="background:${c.color};cursor:default">
+      <div class="top"><div class="nm">${esc(c.name)}</div><div class="brand">${esc(c.brand)}</div></div>
+      <div class="chip"></div><div class="num">•••• ${esc(c.last4)}</div>
+      <div class="bot"><span>${c.type.toUpperCase()}</span><b>${money(cardSpend(c.id))} this month</b></div>
+    </div>
+    <input id="payAmt" class="amt" style="margin-top:16px" inputmode="decimal" placeholder="0.00" aria-label="Amount">
+    <input id="payWhere" placeholder="Where are you paying?" style="margin-top:10px" list="merchants">
+    <div class="btns" style="justify-content:center">
+      <button class="pxbtn" id="payCancel">CANCEL</button>
+      <button class="pxbtn" id="payEdit">CARD SETTINGS</button>
+      <button class="pxbtn go" id="payGo">✔ LOG PAYMENT</button>
+    </div>
+    <p class="hint">Pay at the terminal with this card, then log it here. It lands in this month's dropdown under the right category automatically.</p>`;
+  $('merchants').innerHTML = [...new Set(txs.map(x => x.merchant))].slice(0, 200).map(m => `<option value="${esc(m)}">`).join('');
+  $('payModal').classList.add('open');
+  setTimeout(() => $('payAmt').focus(), 50);
+  $('payCancel').onclick = () => $('payModal').classList.remove('open');
+  $('payEdit').onclick = () => { $('payModal').classList.remove('open'); editCard(c); };
+  $('payGo').onclick = () => {
+    const amt = parseFloat($('payAmt').value.replace(/[^0-9.]/g, ''));
+    if (!(amt > 0)) return toast('ENTER AN AMOUNT');
+    const merchant = $('payWhere').value.trim() || 'Purchase', cat = guessCat(merchant);
+    const t = { id: 't' + Date.now(), amt: -Math.round(amt * 100) / 100, merchant, cat, card: c.id, date: ymd(new Date()), note: '' };
+    txs.push(t); save();
+    $('paySheet').innerHTML = `<div class="ring">✅</div><div class="ok">${money(amt)}<br>${esc(merchant)}</div><p class="muted">Filed under ${CATS[cat].i} ${CATS[cat].n}. ${c.limit && cardSpend(c.id) > c.limit ? '<br><b class="up">Over this card\'s monthly limit.</b>' : ''}</p><div class="btns" style="justify-content:center"><button class="pxbtn" id="payFix">CHANGE CATEGORY</button><button class="pxbtn go" id="payDone">DONE</button></div>`;
+    $('payDone').onclick = () => $('payModal').classList.remove('open');
+    $('payFix').onclick = () => { $('payModal').classList.remove('open'); editTx(t); };
+    renderAll(); checkBudget(t);
+  };
+}
+$('quickPay').onclick = () => openPay();
+
+/* ================= Card editor ================= */
+let editingCard = null, cColor = COLORS[0];
+function editCard(c){
+  editingCard = c || null;
+  $('cardTitle').textContent = c ? 'EDIT CARD' : 'ADD CARD';
+  $('cName').value = c?.name || ''; $('cBrand').value = c?.brand || 'VISA'; $('cLast4').value = c?.last4 || '';
+  $('cType').value = c?.type || 'debit'; $('cLimit').value = c?.limit || '';
+  cColor = c?.color || COLORS[cards.length % COLORS.length];
+  const sw = () => { $('cColors').innerHTML = COLORS.map(x => `<button style="background:${x}" class="${x === cColor ? 'on' : ''}" data-x="${x}" aria-label="Color"></button>`).join(''); $('cColors').querySelectorAll('button').forEach(b => b.onclick = () => { cColor = b.dataset.x; sw(); }); };
+  sw();
+  $('cDelete').style.display = $('cDefault').style.display = c ? '' : 'none';
+  $('cardModal').classList.add('open');
+}
+$('cLast4').addEventListener('input', () => $('cLast4').value = $('cLast4').value.replace(/\D/g, '').slice(0, 4));
+$('cCancel').onclick = () => $('cardModal').classList.remove('open');
+$('cDefault').onclick = () => { store.set('defaultCard', editingCard.id); $('cardModal').classList.remove('open'); renderAll(); toast('DEFAULT CARD SET'); };
+$('cDelete').onclick = () => {
+  if (!confirm(`Remove ${editingCard.name}? Its past transactions stay, marked "No card".`)) return;
+  txs.forEach(t => { if (t.card === editingCard.id) t.card = ''; });
+  cards = cards.filter(c => c !== editingCard); save(); $('cardModal').classList.remove('open'); renderAll();
+};
+$('cSave').onclick = () => {
+  const name = $('cName').value.trim(); if (!name) return toast('NAME THE CARD');
+  const vals = { name, brand: $('cBrand').value, last4: $('cLast4').value, type: $('cType').value, limit: +$('cLimit').value || 0, color: cColor };
+  if (editingCard) Object.assign(editingCard, vals); else { const id = 'c' + Date.now(); cards.push({ id, ...vals }); if (cards.length === 1) store.set('defaultCard', id); }
+  save(); $('cardModal').classList.remove('open'); renderAll(); toast('CARD SAVED');
+};
+
+/* ================= Passes + Code 128 barcodes ================= */
+const C128 = '212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232'.split(' ');
+function drawCode128(canvas, text){
+  // Code set B covers printable ASCII; checksum = (104 + Σ pos·value) mod 103.
+  const vals = [...text].map(ch => ch.charCodeAt(0) - 32).filter(v => v >= 0 && v < 95);
+  const seq = [104, ...vals]; let sum = 104; vals.forEach((v, i) => sum += v * (i + 1)); seq.push(sum % 103);
+  const widths = seq.map(v => C128[v]).join('') + '2331112';
+  const modules = [...widths].reduce((a, w) => a + +w, 0) + 20, scale = Math.max(2, Math.floor(600 / modules));
+  canvas.width = modules * scale; canvas.height = 110;
+  const x = canvas.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, canvas.width, canvas.height); x.fillStyle = '#000';
+  let pos = 10; [...widths].forEach((w, i) => { if (i % 2 === 0) x.fillRect(pos * scale, 0, +w * scale, canvas.height); pos += +w; });
+}
+function renderPasses(){
+  $('passes').innerHTML = passes.length ? passes.map(p => `<div class="pass" data-pass="${p.id}" style="background:${p.color}"><div class="pn">${esc(p.name)}</div><div class="pt">${esc(p.type)} · ${esc(p.code)}</div><div class="pc">${p.icon || '🎟'}</div></div>`).join('') : '<div class="empty"><span class="px">NO PASSES</span>Add your loyalty and membership cards.</div>';
+  $('passes').querySelectorAll('[data-pass]').forEach(d => d.onclick = () => showPass(passes.find(p => p.id === d.dataset.pass)));
+}
+function showPass(p){
+  $('passSheet').innerHTML = `<div class="pass" style="background:${p.color};cursor:default"><div class="pn">${esc(p.name)}</div><div class="pt">${esc(p.type)}</div><div class="pc">${p.icon || '🎟'}</div>
+    <div class="barcode"><canvas id="bc"></canvas><div>${esc(p.code)}</div></div></div>
+    <div class="btns"><button class="pxbtn warn" id="pDel">DELETE</button><button class="pxbtn" id="pEdit">EDIT</button><button class="pxbtn go" id="pClose">DONE</button></div>`;
+  drawCode128($('bc'), p.code);
+  $('passModal').classList.add('open');
+  $('pClose').onclick = () => $('passModal').classList.remove('open');
+  $('pDel').onclick = () => { passes = passes.filter(x => x !== p); save(); renderPasses(); $('passModal').classList.remove('open'); };
+  $('pEdit').onclick = () => editPass(p);
+}
+function editPass(p){
+  const icons = ['🎟', '🛒', '☕', '⛽', '📚', '🏋', '🎬', '✈️', '🏥', '🎁'];
+  let col = p?.color || COLORS[passes.length % COLORS.length], ic = p?.icon || '🎟';
+  $('passSheet').innerHTML = `<h2>${p ? 'EDIT' : 'ADD'} PASS</h2>
+    <label class="f">NAME</label><input id="pName" value="${esc(p?.name || '')}" placeholder="e.g. Costco Membership">
+    <div class="grid2"><div><label class="f">TYPE</label><select id="pType">${['Loyalty', 'Membership', 'Gift card', 'Ticket', 'ID', 'Other'].map(t => `<option ${t === p?.type ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+    <div><label class="f">ICON</label><select id="pIcon">${icons.map(i => `<option ${i === ic ? 'selected' : ''}>${i}</option>`).join('')}</select></div></div>
+    <label class="f">CARD NUMBER / BARCODE</label><input id="pCode" value="${esc(p?.code || '')}" placeholder="The number printed under the barcode" autocomplete="off">
+    <label class="f">COLOR</label><div class="swatches" id="pColors"></div>
+    <div class="btns"><button class="pxbtn" id="pCancel">CANCEL</button><button class="pxbtn go" id="pSave">SAVE</button></div>`;
+  const sw = () => { $('pColors').innerHTML = COLORS.map(x => `<button style="background:${x}" class="${x === col ? 'on' : ''}" data-x="${x}" aria-label="Color"></button>`).join(''); $('pColors').querySelectorAll('button').forEach(b => b.onclick = () => { col = b.dataset.x; sw(); }); };
+  sw(); $('passModal').classList.add('open');
+  $('pCancel').onclick = () => $('passModal').classList.remove('open');
+  $('pSave').onclick = () => {
+    const name = $('pName').value.trim(), code = $('pCode').value.trim();
+    if (!name || !code) return toast('NAME AND NUMBER NEEDED');
+    const vals = { name, code, type: $('pType').value, icon: $('pIcon').value, color: col, demo: false };
+    if (p) Object.assign(p, vals); else passes.push({ id: 'p' + Date.now(), ...vals });
+    save(); renderPasses(); $('passModal').classList.remove('open'); toast('PASS SAVED');
+  };
+}
+$('addPass').onclick = () => editPass();
+
+/* ================= CSV import / export ================= */
+function parseCSV(text){
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++){
+    const ch = text[i];
+    if (q){ if (ch === '"' && text[i + 1] === '"'){ cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch; }
+    else if (ch === '"') q = true; else if (ch === ','){ row.push(cell); cell = ''; } else if (ch === '\n' || ch === '\r'){ if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; } else cell += ch;
+  }
+  if (cell || row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim()));
+}
+function toDate(s){
+  s = s.trim(); let m;
+  if ((m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return ymd(new Date(+m[1], m[2] - 1, +m[3]));
+  if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/))) return ymd(new Date(+m[3] < 100 ? 2000 + +m[3] : +m[3], m[1] - 1, +m[2]));
+  const d = new Date(s); return isNaN(d) ? null : ymd(d);
+}
+const num = s => { const t = String(s).trim(), neg = /^\(.*\)$/.test(t) || /^-/.test(t); const n = parseFloat(t.replace(/[^0-9.]/g, '')); return isNaN(n) ? null : neg ? -n : n; };
+$('csvIn').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return; e.target.value = '';
+  const rows = parseCSV(await f.text()); if (rows.length < 2) return toast('EMPTY FILE');
+  const head = rows[0].map(h => h.toLowerCase().trim());
+  const find = re => head.findIndex(h => re.test(h));
+  const iDate = find(/date/), iDesc = find(/desc|merchant|payee|name|memo|details/), iAmt = find(/^amount|amount$|^amt/), iDebit = find(/debit|withdraw/), iCredit = find(/credit|deposit/);
+  if (iDate < 0 || iDesc < 0 || (iAmt < 0 && iDebit < 0)) return toast('COULD NOT FIND DATE/DESCRIPTION/AMOUNT COLUMNS');
+  // Some banks export purchases as positive numbers; if most amounts are positive, flip them.
+  const raw = rows.slice(1).map(r => {
+    let amt = iAmt >= 0 ? num(r[iAmt]) : (num(r[iCredit]) || 0) - (num(r[iDebit]) || 0);
+    return { date: toDate(r[iDate] || ''), merchant: (r[iDesc] || '').replace(/\s+/g, ' ').trim(), amt };
+  }).filter(r => r.date && r.amt);
+  const positives = raw.filter(r => r.amt > 0).length, flip = iAmt >= 0 && positives > raw.length * 0.7;
+  const existing = new Set(txs.map(t => t.date + '|' + t.merchant + '|' + t.amt));
+  const card = $('fCard').value !== 'all' ? $('fCard').value : store.get('defaultCard', cards[0]?.id || '');
+  let added = 0;
+  raw.forEach((r, i) => {
+    const amt = Math.round((flip ? -r.amt : r.amt) * 100) / 100, key = r.date + '|' + r.merchant + '|' + amt;
+    if (existing.has(key)) return; existing.add(key);
+    txs.push({ id: 'i' + Date.now() + '_' + i, amt, merchant: r.merchant, cat: amt > 0 ? 'income' : guessCat(r.merchant), card, date: r.date, note: '' });
+    added++;
+  });
+  save(); renderAll(); toast(`IMPORTED ${added} TRANSACTION${added === 1 ? '' : 'S'}`);
+};
+$('csvOut').onclick = () => {
+  const q = s => `"${String(s).replace(/"/g, '""')}"`;
+  const lines = ['Date,Merchant,Category,Amount,Card,Note', ...[...txs].sort((a, b) => a.date.localeCompare(b.date)).map(t => [t.date, q(t.merchant), CATS[t.cat]?.n || 'Other', t.amt.toFixed(2), q(cardById(t.card)?.name || ''), q(t.note)].join(','))];
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' })); a.download = `bitwallet-${ymd(new Date())}.csv`; a.click();
+};
+
+/* ================= Budgets & settings ================= */
+$('budgetBtn').onclick = () => {
+  $('budgetList').innerHTML = Object.entries(CATS).filter(([id]) => id !== 'income').map(([id, c]) => `<div class="rowflex" style="margin-top:8px"><span style="flex:1">${c.i} ${c.n}</span><input type="number" min="0" data-b="${id}" value="${budgets[id] || ''}" placeholder="No limit" style="width:130px"></div>`).join('');
+  $('budgetModal').classList.add('open');
+};
+$('budgetSave').onclick = () => { $('budgetList').querySelectorAll('[data-b]').forEach(i => { const v = +i.value; if (v > 0) budgets[i.dataset.b] = v; else delete budgets[i.dataset.b]; }); save(); $('budgetModal').classList.remove('open'); renderAll(); toast('BUDGETS SAVED'); };
+$('currency').innerHTML = ['USD', 'CAD', 'EUR', 'GBP', 'AUD', 'MXN', 'JPY', 'INR'].map(c => `<option ${c === currency ? 'selected' : ''}>${c}</option>`).join('');
+$('currency').onchange = () => { currency = $('currency').value; store.set('currency', currency); renderAll(); };
+$('wipe').onclick = () => { if (!confirm('Erase every card, pass and transaction on this device?')) return; cards = []; txs = []; passes = []; budgets = {}; store.set('demo', false); save(); renderAll(); toast('WALLET ERASED'); };
+$('addTxBtn').onclick = () => editTx();
+$('addIncomeBtn').onclick = () => editTx(null, { income: true });
+$('addCardBtn').onclick = () => editCard();
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+
+/* ================= Tabs ================= */
+function renderAll(){ renderBanner(); renderSummary(); renderCards(); renderRecent(); renderFilters(); renderMonths(); renderPasses(); }
+function show(v){
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
+  store.set('tab', v); window.scrollTo(0, 0);
+}
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => show(b.dataset.v));
+document.querySelectorAll('[data-goto]').forEach(b => b.onclick = () => show(b.dataset.goto));
+renderAll(); show(store.get('tab', 'wallet'));
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
