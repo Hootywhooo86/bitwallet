@@ -38,6 +38,14 @@ Live at https://hootywhooo86.github.io/bitwallet/app/ (installable PWA, works of
 
 Real tap-to-pay like Google Wallet needs a native Android app using NFC host card emulation **plus** a card-tokenization deal with Visa/Mastercard through an issuer or a provider (e.g. Stripe Issuing, Marqeta). A web page can't do NFC payments. So today you pay with your physical card and bitwallet logs it in one tap. Bank auto-sync (Plaid, etc.) would fill the dropdowns without manual entry. Both need a backend and are the next big decisions.
 
+## Android app
+
+`android/` wraps the same web app with [Capacitor](https://capacitorjs.com) as an offline Android app (everything bundled, no internet needed). GitHub Actions builds the APK on every push (`.github/workflows/android.yml`); pushes to `main` publish it at https://github.com/Hootywhooo86/bitwallet/releases/tag/android-latest. Open that page on your phone, download `bitwallet.apk`, and allow installs from your browser. Later builds install over the old one and keep your data.
+
+- Build it yourself: `npm ci && npx cap sync android && cd android && ./gradlew assembleDebug` (JDK 21 + Android SDK). `tools/make_icons.py` regenerates the pixel icons.
+- The app keeps its own saved data, separate from the browser version, and the "use on every 128bit app" colour switch can't reach across separate Android apps.
+- Signed with `android/app/sideload.keystore`, a key committed to the repo for sideloading. A Play Store release needs a private key kept out of the repo.
+
 ## Status
 
 - Landing page: live, links to the app.

@@ -1,0 +1,8 @@
+{
+  "appId": "com.hootywhooo86.bitwallet",
+  "appName": "bitwallet",
+  "webDir": "app",
+  "android": {
+    "backgroundColor": "#0b0b16"
+  }
+}
