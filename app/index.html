@@ -309,15 +309,15 @@ const monthName = k => parseYmd(k + '-01').toLocaleDateString([], { month: 'long
 
 /* ================= Categories ================= */
 const CATS = {
-  groceries: { n: 'Groceries', i: '🛒', c: '#4ade80', k: ['kroger','walmart','aldi','safeway','publix','whole foods','trader joe','costco','grocery','market','heb','meijer','food lion','wegmans','sprouts','instacart'] },
-  dining: { n: 'Dining', i: '🍔', c: '#ff9f1c', k: ['restaurant','mcdonald','starbucks','chipotle','pizza','cafe','coffee','taco','burger','wendy','subway','doordash','uber eats','grubhub','diner','grill','kitchen','chick-fil','dunkin','panera','bakery','donut','bar '] },
-  gas: { n: 'Gas', i: '⛽', c: '#facc15', k: ['shell','exxon','chevron','bp ','marathon','speedway','sunoco','gas','fuel','circle k','wawa','sheetz','valero','mobil','citgo','racetrac'] },
-  shopping: { n: 'Shopping', i: '🛍', c: '#ff5d8f', k: ['amazon','target','best buy','ebay','etsy','store','shop','mall','home depot','lowe','ikea','apple store','nike','clothing','macy','tj maxx','marshalls','kohl'] },
-  bills: { n: 'Bills', i: '🧾', c: '#38bdf8', k: ['electric','power','water','utility','internet','comcast','xfinity','verizon','at&t','t-mobile','insurance','rent','mortgage','phone','energy','geico','progressive','state farm'] },
+  groceries: { n: 'Groceries', i: '🛒', c: '#4ade80', k: ['kroger','walmart','aldi','safeway','publix','whole foods','trader joe','costco','grocery','market','heb','meijer','food lion','wegmans','sprouts','instacart','loblaws','no frills','sobeys','food basics','freshco','superstore','save-on','iga ','farm boy','longo','zehrs','foodland'] },
+  dining: { n: 'Dining', i: '🍔', c: '#ff9f1c', k: ['restaurant','mcdonald','starbucks','chipotle','pizza','cafe','coffee','taco','burger','wendy','subway','doordash','uber eats','grubhub','diner','grill','kitchen','chick-fil','dunkin','panera','bakery','donut','bar ','tim hortons','a&w','harvey','second cup','mary brown','skip the dishes','skipthedishes'] },
+  gas: { n: 'Gas', i: '⛽', c: '#facc15', k: ['shell','exxon','chevron','bp ','marathon','speedway','sunoco','gas','fuel','circle k','wawa','sheetz','valero','mobil','citgo','racetrac','petro-can','esso','husky','pioneer','ultramar','irving','co-op gas'] },
+  shopping: { n: 'Shopping', i: '🛍', c: '#ff5d8f', k: ['amazon','target','best buy','ebay','etsy','store','shop','mall','home depot','lowe','ikea','apple store','nike','clothing','macy','tj maxx','marshalls','kohl','canadian tire','dollarama','winners','hudson','the bay','sport chek','staples','best buy canada'] },
+  bills: { n: 'Bills', i: '🧾', c: '#38bdf8', k: ['electric','power','water','utility','internet','comcast','xfinity','verizon','at&t','t-mobile','insurance','rent','mortgage','phone','energy','geico','progressive','state farm','rogers','bell canada','telus','fido','koodo','virgin plus','freedom mobile','hydro','enbridge','intact insurance'] },
   subs: { n: 'Subscriptions', i: '🔁', c: '#a78bfa', k: ['netflix','spotify','hulu','disney','youtube','apple.com','icloud','prime','patreon','xbox','playstation','nintendo','adobe','openai','audible','paramount','max.com','hbo'] },
-  transport: { n: 'Transport', i: '🚌', c: '#2dd4bf', k: ['uber','lyft','transit','metro','parking','toll','train','amtrak','bus','taxi','bird','lime'] },
+  transport: { n: 'Transport', i: '🚌', c: '#2dd4bf', k: ['uber','lyft','transit','metro','parking','toll','train','amtrak','bus','taxi','bird','lime','presto','ttc','go transit','oc transpo','translink','stm '] },
   fun: { n: 'Entertainment', i: '🎮', c: '#fb7185', k: ['movie','cinema','amc','theater','concert','ticket','steam','game','bowling','arcade','museum','zoo','sport'] },
-  health: { n: 'Health', i: '💊', c: '#f472b6', k: ['pharmacy','cvs','walgreens','rite aid','doctor','dental','clinic','hospital','gym','fitness','planet fitness','medical','vision'] },
+  health: { n: 'Health', i: '💊', c: '#f472b6', k: ['pharmacy','cvs','walgreens','rite aid','doctor','dental','clinic','hospital','gym','fitness','planet fitness','medical','vision','shoppers drug','pharmasave','rexall','jean coutu','london drugs'] },
   travel: { n: 'Travel', i: '✈️', c: '#60a5fa', k: ['airline','airbnb','hotel','delta','united','american air','southwest','expedia','booking.com','marriott','hilton','motel','resort'] },
   other: { n: 'Other', i: '📦', c: '#9a97b8', k: [] },
   income: { n: 'Money in', i: '💰', c: '#22c55e', k: ['payroll','paycheck','salary','deposit','refund','venmo from','zelle from','transfer from','interest'] }
@@ -623,21 +623,30 @@ $('csvIn').onchange = async e => {
   const rows = parseCSV(await f.text()); if (rows.length < 2) return toast('EMPTY FILE');
   const head = rows[0].map(h => h.toLowerCase().trim());
   const find = re => head.findIndex(h => re.test(h));
-  const iDate = find(/date/), iDesc = find(/desc|merchant|payee|name|memo|details/), iAmt = find(/^amount|amount$|^amt/), iDebit = find(/debit|withdraw/), iCredit = find(/credit|deposit/);
+  // RBC-style exports: "CAD$"/"USD$" amounts, "Description 1"/"Description 2", one file for every account.
+  const iDate = find(/date/), iDesc = find(/desc|merchant|payee|name|memo|details/), iAmt = find(/^amount|amount$|^amt|^cad\$/), iUsd = find(/^usd\$/), iDebit = find(/debit|withdraw/), iCredit = find(/credit|deposit/);
+  const iDesc2 = head.findIndex((h, i) => i !== iDesc && /^description 2|^desc.*2$/.test(h)), iAcct = find(/account number/), iAcctType = find(/account type/);
   if (iDate < 0 || iDesc < 0 || (iAmt < 0 && iDebit < 0)) return toast('COULD NOT FIND DATE/DESCRIPTION/AMOUNT COLUMNS');
   // Some banks export purchases as positive numbers; if most amounts are positive, flip them.
   const raw = rows.slice(1).map(r => {
-    let amt = iAmt >= 0 ? num(r[iAmt]) : (num(r[iCredit]) || 0) - (num(r[iDebit]) || 0);
-    return { date: toDate(r[iDate] || ''), merchant: (r[iDesc] || '').replace(/\s+/g, ' ').trim(), amt };
-  }).filter(r => r.date && r.amt);
+    let amt = iAmt >= 0 ? (num(r[iAmt]) ?? (iUsd >= 0 ? num(r[iUsd]) : null)) : (num(r[iCredit]) || 0) - (num(r[iDebit]) || 0);
+    const merchant = [r[iDesc], iDesc2 >= 0 ? r[iDesc2] : ''].filter(x => x && x.trim()).join(' ').replace(/\s+/g, ' ').trim();
+    return { date: toDate(r[iDate] || ''), merchant, amt, acct: iAcct >= 0 ? String(r[iAcct] || '').replace(/\D/g, '').slice(-4) : '', acctType: iAcctType >= 0 ? (r[iAcctType] || '').trim() : '' };
+  }).filter(r => r.date && r.amt && !/payment - thank you|paiement - merci/i.test(r.merchant));
   const positives = raw.filter(r => r.amt > 0).length, flip = iAmt >= 0 && positives > raw.length * 0.7;
   const existing = new Set(txs.map(t => t.date + '|' + t.merchant + '|' + t.amt));
   const card = $('fCard').value !== 'all' ? $('fCard').value : store.get('defaultCard', cards[0]?.id || '');
+  // Files that cover several accounts: match each row to the card with the same last 4, or add that card.
+  const cardFor = r => {
+    let c = cards.find(c => c.last4 === r.acct);
+    if (!c){ const credit = /visa|master|credit/i.test(r.acctType); c = { id: 'c' + Date.now() + cards.length, name: (r.acctType || 'Account') + ' ' + r.acct, brand: /master/i.test(r.acctType) ? 'MASTERCARD' : credit ? 'VISA' : 'DEBIT', last4: r.acct, type: credit ? 'credit' : 'debit', limit: 0, color: COLORS[cards.length % COLORS.length] }; cards.push(c); }
+    return c.id;
+  };
   let added = 0;
   raw.forEach((r, i) => {
     const amt = Math.round((flip ? -r.amt : r.amt) * 100) / 100, key = r.date + '|' + r.merchant + '|' + amt;
     if (existing.has(key)) return; existing.add(key);
-    txs.push({ id: 'i' + Date.now() + '_' + i, amt, merchant: r.merchant, cat: amt > 0 ? 'income' : guessCat(r.merchant), card, date: r.date, note: '' });
+    txs.push({ id: 'i' + Date.now() + '_' + i, amt, merchant: r.merchant, cat: amt > 0 ? 'income' : guessCat(r.merchant), card: r.acct ? cardFor(r) : card, date: r.date, note: '' });
     added++;
   });
   save(); renderAll(); toast(`IMPORTED ${added} TRANSACTION${added === 1 ? '' : 'S'}`);
